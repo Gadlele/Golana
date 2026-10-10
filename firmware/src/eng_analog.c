@@ -22,8 +22,8 @@ static const param_desc_t ANALOG_SUB = {"SUB", F_PCT, 0, 127, 64, 0, 0};      /*
 static inline int32_t analog_tap(const tsvf_t *c, int32_t k, int32_t in, int32_t *ic1, int32_t *ic2, uint32_t ft)
 {
     int32_t v3 = in - *ic2;
-    int32_t v1 = (c->a1 * *ic1 + c->a2 * v3) >> 13;
-    int32_t v2 = *ic2 + ((c->a2 * *ic1 + c->a3 * v3) >> 13);
+    int32_t v1 = (c->a1 * *ic1 + c->a2 * v3 + 4096) >> 13;   /* rounded: see tsvf_lp (dsp.c) */
+    int32_t v2 = *ic2 + ((c->a2 * *ic1 + c->a3 * v3 + 4096) >> 13);
     *ic1 = clamp(2 * v1 - *ic1, -150000, 150000);
     *ic2 = clamp(2 * v2 - *ic2, -150000, 150000);
     if (!ft)

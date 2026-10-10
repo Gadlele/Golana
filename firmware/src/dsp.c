@@ -103,8 +103,15 @@ static inline void tsvf_coef(tsvf_t *c, int32_t cut, int32_t reso)   /* reso 0..
 static inline int32_t tsvf_lp(const tsvf_t *c, int32_t in, int32_t *ic1, int32_t *ic2)
 {
     int32_t v3 = in - *ic2;
-    int32_t v1 = (c->a1 * *ic1 + c->a2 * v3) >> 13;
-    int32_t v2 = *ic2 + ((c->a2 * *ic1 + c->a3 * v3) >> 13);
+    /* The shifts round (+ 4096 = half of 2^13), as eng_noise.c's own copy of this filter
+     * already does: "at low cutoffs the floor of the shifts walked the integrators off
+     * zero (DC)".  Measured on the host build (spikes/005-svf-rounding/ab.sh, ANALOG saw,
+     * DRV 0, no sends): at CUT 8 RES 0 the unrounded output is 19 dB louder, its mean
+     * +44 LSB against +3.5 -- the offset it walks in; CUT 30, levels agree within 1 dB;
+     * CUT 60 up, -42 .. -68 dB.  Nothing audible at a normal setting; a 19 dB DC thump
+     * removed at the bottom of the range. */
+    int32_t v1 = (c->a1 * *ic1 + c->a2 * v3 + 4096) >> 13;
+    int32_t v2 = *ic2 + ((c->a2 * *ic1 + c->a3 * v3 + 4096) >> 13);
     *ic1 = clamp(2 * v1 - *ic1, -150000, 150000);
     *ic2 = clamp(2 * v2 - *ic2, -150000, 150000);
     return v2;
