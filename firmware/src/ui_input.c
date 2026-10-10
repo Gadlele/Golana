@@ -475,7 +475,7 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
 /* SEQ > SEQUENCE: KNOB k turns track k's sequence, 1..8 (no wrap) */
 static void seqs_edit(uint32_t slot, int32_t steps)
 {
-    int32_t n = (int32_t)pb_cur[slot % NTRK] + steps;
+    int32_t n = (int32_t)pb_target(slot) + steps;      /* (from the waiting one: SEQ SWITCH END) */
     seq_switch_ui(slot % NTRK, (uint32_t)clamp(n, 0, (int32_t)PB_N - 1));
 }
 #endif

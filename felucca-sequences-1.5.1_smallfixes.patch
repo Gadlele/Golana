@@ -1,4 +1,4 @@
-From 0d294dc5264c5cd8889142c9f455826e3fae2890 Mon Sep 17 00:00:00 2001
+From 45c8475f4c5455461c214a72c4052c43660df13f Mon Sep 17 00:00:00 2001
 From: Felucca dev <dev@example.invalid>
 Date: Sat, 10 Oct 2026 14:53:08 +0000
 Subject: [PATCH] Eight sequences per track (FELUCCA_PATBANK), with MENU >
@@ -6,27 +6,28 @@ Subject: [PATCH] Eight sequences per track (FELUCCA_PATBANK), with MENU >
 
 Each track plays one of eight sequences (own steps, LEN, 64 automation records).
 SEQ > SEQUENCE (fourth SEQ page); SEQ held + C5..G5; MENU > CONTROL > SEQ SWITCH
-NOW / END. Project SAVE/LOAD and the autosave keep them in the flash the user
-sample slots had (builds without FELUCCA_PATBANK keep USR1..3). Based on 1.5.1.
+NOW / END (the knob steps from the sequence that waits). Project SAVE/LOAD and
+the autosave keep them in the flash the user sample slots had (builds without
+FELUCCA_PATBANK keep USR1..3). Version string v1.5.1_sequences. Based on 1.5.1.
 ---
  BUILDING.md                  |   1 +
- README.md                    |  18 ++-
+ README.md                    |  18 +-
  firmware/src/core.h          |   8 +
  firmware/src/editor.c        |   6 +-
  firmware/src/editor_backup.c |   3 +-
  firmware/src/editor_menu.c   |   1 +
  firmware/src/eng_sample.c    |   3 +-
- firmware/src/felucca.c       |   1 +
+ firmware/src/felucca.c       |   3 +-
  firmware/src/icons.c         |   1 +
  firmware/src/main.c          |   1 +
  firmware/src/menu_items.c    |   8 +-
  firmware/src/params.c        |   5 +-
- firmware/src/patbank.c       | 250 +++++++++++++++++++++++++++++
- firmware/src/patbank_store.c | 140 +++++++++++++++++
+ firmware/src/patbank.c       | 258 +++++++++++++++++++++++++++++
+ firmware/src/patbank_store.c | 140 ++++++++++++++++
  firmware/src/project.c       |  29 ++++
  firmware/src/storage.c       |  24 ++-
  firmware/src/ui.c            |   9 +-
- firmware/src/ui_draw.c       |  11 ++
+ firmware/src/ui_draw.c       |  12 ++
  firmware/src/ui_graph.c      |  41 +++++
  firmware/src/ui_help.c       |   1 +
  firmware/src/ui_input.c      |  16 +-
@@ -36,14 +37,14 @@ sample slots had (builds without FELUCCA_PATBANK keep USR1..3). Based on 1.5.1.
  tests/detail_test.c          |   8 +-
  tests/editor_test.c          |  29 ++--
  tests/fm6bank_test.c         |   1 +
- tests/patbank_test.c         | 296 +++++++++++++++++++++++++++++++++++
+ tests/patbank_test.c         | 307 +++++++++++++++++++++++++++++++++++
  tests/persistence_test.c     |   1 +
- tests/run_tests.sh           |  18 ++-
- tests/ui_render.c            |  19 ++-
- tests/ui_test.c              |  27 ++--
+ tests/run_tests.sh           |  18 +-
+ tests/ui_render.c            |  24 ++-
+ tests/ui_test.c              |  56 +++++--
  tools/build.py               |   2 +-
  web/emu/felucca_web.c        |   1 +
- 34 files changed, 1001 insertions(+), 61 deletions(-)
+ 34 files changed, 1056 insertions(+), 62 deletions(-)
  create mode 100644 firmware/src/patbank.c
  create mode 100644 firmware/src/patbank_store.c
  create mode 100644 tests/patbank_test.c
@@ -184,9 +185,18 @@ index b6245f4..de691f1 100644
          base = (uint32_t)(uintptr_t)(smp_user_xip(k) + SMP_USER_DATA) - (uint32_t)(uintptr_t)SMP_DATA;
          for (nz = h->nz, i = 0; i < nz; i++) {
 diff --git a/firmware/src/felucca.c b/firmware/src/felucca.c
-index 7242453..0e7362c 100644
+index 7242453..44786b0 100644
 --- a/firmware/src/felucca.c
 +++ b/firmware/src/felucca.c
+@@ -32,7 +32,7 @@
+ #define FELUCCA_ID "FM-1_900"    /* package identity (build.py: the .fwsc marker string) */
+ #endif
+ #ifndef FELUCCA_VERSION
+-#define FELUCCA_VERSION "v1.5.1" /* shown in the menu, the console and the editor; build.py --release X.Y */
++#define FELUCCA_VERSION "v1.5.1_sequences" /* shown in the splash, the menu (ABOUT, INFO), the console and the editor; build.py --release X.Y */
+ #endif
+ #if FELUCCA_OTA && !FELUCCA_FLASH
+ #error "FELUCCA_OTA needs FELUCCA_FLASH"
 @@ -92,6 +92,7 @@
  #include "storage.c"
  #endif
@@ -287,10 +297,10 @@ index dcca6af..d1c9cbf 100644
      {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},
 diff --git a/firmware/src/patbank.c b/firmware/src/patbank.c
 new file mode 100644
-index 0000000..4441c39
+index 0000000..e1a3d0a
 --- /dev/null
 +++ b/firmware/src/patbank.c
-@@ -0,0 +1,250 @@
+@@ -0,0 +1,258 @@
 +/* SPDX-License-Identifier: GPL-3.0-only
 + * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 +/* Sequences: eight per track (FELUCCA_PATBANK). A track plays one of them at a time: trk[].step is the one playing, the
@@ -488,6 +498,14 @@ index 0000000..4441c39
 +    pb_dirty |= (uint8_t)(1u << (q / PB_PER) | 1u << (old / PB_PER) | 1u << PB_META_O);
 +    pb_gen++;
 +    return 0;
++}
++
++/* the sequence a knob step starts from: the one waiting (SEQ SWITCH END) if there is one, else the one playing. Stepping from
++ * the playing one made every step land on the same neighbour while a switch waited: a far sequence could not be reached */
++static uint32_t pb_target(uint32_t t)
++{
++    t %= NTRK;
++    return pb_next[t] ? (uint32_t)pb_next[t] - 1u : pb_cur[t];
 +}
 +
 +/* a sequence chosen for track t (SEQ > SEQUENCE's knobs, SEQ held + C5..G5). MENU > CONTROL > SEQ SWITCH: NOW at once; END,
@@ -884,10 +902,10 @@ index 7d4f48f..79a6a9f 100644
  /* ---------------------------------------------------- action pages --- */
  /* Pages whose purpose is an action (SAVE > USER, PHRASES, PROJECT, TOOLS, EDIT > SLICES, SEQ > AUTOMATION): the knobs pick,
 diff --git a/firmware/src/ui_draw.c b/firmware/src/ui_draw.c
-index 627ac60..5d6688d 100644
+index 627ac60..de15e2e 100644
 --- a/firmware/src/ui_draw.c
 +++ b/firmware/src/ui_draw.c
-@@ -992,6 +992,17 @@ static void draw_columns(void)
+@@ -992,6 +992,18 @@ static void draw_columns(void)
          for (c = 0; c < 4u; c++) draw_act_column(c, labels[c], VAL(c), icons[c]);
          return;
      }
@@ -896,8 +914,9 @@ index 627ac60..5d6688d 100644
 +        char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0};
 +        for (c = 0; c < NTRK; c++) {
 +            lb[1] = (char)('1' + c);
-+            sq[0] = (char)('1' + pb_cur[c]);
-+            draw_column(c, lb, sq, "/8", c == song.sel ? T_ACCENT : VAL(c), (int32_t)pb_cur[c] * 1000 / 7, ICON_X_PATTERN);
++            sq[0] = (char)('1' + pb_target(c));                 /* (a waiting switch: the one it waits for, "NEXT") */
++            draw_column(c, lb, sq, pb_next[c] ? "NEXT" : "/8", c == song.sel ? T_ACCENT : VAL(c),
++                        (int32_t)pb_target(c) * 1000 / 7, ICON_X_PATTERN);
 +        }
 +        return;
 +    }
@@ -977,7 +996,7 @@ index 595d5fd..675da53 100644
      {"CLOCK", "[SELECT]TEMPO[GLO]HOLD: TAP"},
  };
 diff --git a/firmware/src/ui_input.c b/firmware/src/ui_input.c
-index c0f9ab4..db8fb0c 100644
+index c0f9ab4..1a6169e 100644
 --- a/firmware/src/ui_input.c
 +++ b/firmware/src/ui_input.c
 @@ -471,6 +471,14 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
@@ -988,7 +1007,7 @@ index c0f9ab4..db8fb0c 100644
 +/* SEQ > SEQUENCE: KNOB k turns track k's sequence, 1..8 (no wrap) */
 +static void seqs_edit(uint32_t slot, int32_t steps)
 +{
-+    int32_t n = (int32_t)pb_cur[slot % NTRK] + steps;
++    int32_t n = (int32_t)pb_target(slot) + steps;      /* (from the waiting one: SEQ SWITCH END) */
 +    seq_switch_ui(slot % NTRK, (uint32_t)clamp(n, 0, (int32_t)PB_N - 1));
 +}
 +#endif
@@ -1300,10 +1319,10 @@ index 034e8b5..a59b0cb 100644
  static uint8_t rep[1024];                         /* the editor's reply */
 diff --git a/tests/patbank_test.c b/tests/patbank_test.c
 new file mode 100644
-index 0000000..2f950c2
+index 0000000..4b6da94
 --- /dev/null
 +++ b/tests/patbank_test.c
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,307 @@
 +/* SPDX-License-Identifier: GPL-3.0-only
 + * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 +/* Eight sequences per track (patbank.c, patbank_store.c): the packed steps are a project's, a switch keeps each sequence's
@@ -1594,6 +1613,17 @@ index 0000000..2f950c2
 +        (void)pb_request(2, 1); trk[2].p[P_SLEN] = 16; trk[2].seq_idx = 15;
 +        project_save_as(0, "Q"); pb_reset_to_live();               /* (a project load / reset forgets a waiting switch) */
 +        ok &= !pb_next[2];
++        /* the knob steps from the one waiting, so a far sequence can be reached one step at a time */
++        reset();
++        menu_put(MI_SEQSW, 1); song.playing = 1; trk[0].p[P_SLEN] = 16; trk[0].seq_idx = 2;
++        ok &= pb_target(0) == 0;
++        for (i = 0; i < 6u; i++)
++            (void)pb_request(0, pb_target(0) + 1u);
++        ok &= pb_cur[0] == 0 && pb_next[0] == 7 && pb_target(0) == 6;       /* waiting for the seventh, the first still playing */
++        (void)pb_request(0, pb_target(0) - 4u);
++        ok &= pb_target(0) == 2 && pb_cur[0] == 0;
++        (void)pb_request(0, 0);                                            /* back to the one playing: nothing waits */
++        ok &= pb_target(0) == 0 && !pb_next[0];
 +        bad += check("SEQ SWITCH: NOW at once; END waits for the last step (or a wrap seen), stopped switches at once, same slot cancels", ok);
 +    }
 +
@@ -1674,7 +1704,7 @@ index 01afa55..bcefd6e 100755
              build/piano_hd/PIANO_HD build/sample_demo
      else
 diff --git a/tests/ui_render.c b/tests/ui_render.c
-index a6618b2..3d190c5 100644
+index a6618b2..dbcee69 100644
 --- a/tests/ui_render.c
 +++ b/tests/ui_render.c
 @@ -763,7 +763,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
@@ -1682,7 +1712,7 @@ index a6618b2..3d190c5 100644
         S_LEARN_WAIT, S_LEARN_PICK, S_LEARN_SET, S_LEARN_LONG, S_GLO_LEARN, S_MENU_LCLEAR, S_MENU_LCLEAR_NONE,
         S_DLY_DOT, S_DLY_DOT16, S_FX_THROW,
 -       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_COUNT };
-+       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_SEQUENCE, S_SEQUENCE_FULL, S_COUNT };
++       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_SEQUENCE, S_SEQUENCE_FULL, S_SEQUENCE_NEXT, S_COUNT };
  static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
      "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
      "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -1691,16 +1721,17 @@ index a6618b2..3d190c5 100644
      "learn_wait", "learn_pick", "learn_set", "learn_long", "layer_glo_learn", "menu_learn_clear", "menu_learn_clear_none",
      "dly_dotted", "dly_dotted_16", "perform_throw",
 -    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail"};
-+    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail", "sequence", "sequence_full"};
++    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail", "sequence", "sequence_full", "sequence_next"};
  
  /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
   * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
-@@ -1175,6 +1175,21 @@ static void setup(int s)
+@@ -1175,6 +1175,26 @@ static void setup(int s)
          song.playing = 1; ui.layer = LAYER_FX;
          perf_held = perf_act = PF_BIT(PF_RTHR) | PF_BIT(PF_ETHR);
          break;
 +    case S_SEQUENCE:                                   /* 1.6 SEQ > SEQUENCE: T1 plays 3 (of 1, 3, 4 with notes), T3 plays 2, T4 8 */
-+    case S_SEQUENCE_FULL: {
++    case S_SEQUENCE_FULL:
++    case S_SEQUENCE_NEXT: {
 +        uint32_t t, q;
 +        for (t = 0; t < NTRK; t++)
 +            for (q = 0; q < PB_N; q++) {
@@ -1711,6 +1742,10 @@ index a6618b2..3d190c5 100644
 +            }
 +        (void)pb_select(0, 2); (void)pb_select(2, 1); (void)pb_select(3, 7);
 +        song.sel = s == S_SEQUENCE_FULL ? 3 : 0;
++        if (s == S_SEQUENCE_NEXT) {                    /* SEQ SWITCH END, playing: T1 and T3 wait (for 6 and 1) */
++            ui_prefs2 |= (uint8_t)(PREF_SEQ_END >> 16); song.playing = 1;
++            (void)pb_request(0, 5); (void)pb_request(2, 0);
++        }
 +        go_page(GR_SEQS); ui.hot_col = 2; ui.hot_t = 30;
 +        break;
 +    }
@@ -1718,7 +1753,7 @@ index a6618b2..3d190c5 100644
          ui.menu = 3; ui.menu_sel = MI_INFO; song.cpu_q8 = 87u;   /* (34 %; USB: the host has none, OFF) */
          info.t = fm1_ms - INFO_CPU_MS;
 diff --git a/tests/ui_test.c b/tests/ui_test.c
-index c66050f..909af1d 100644
+index c66050f..86bbaac 100644
 --- a/tests/ui_test.c
 +++ b/tests/ui_test.c
 @@ -154,6 +154,7 @@ static struct { uint32_t stage; } felucca_dbg;
@@ -1808,6 +1843,49 @@ index c66050f..909af1d 100644
      press(B_GLO); frames(400);
      ok &= str_eq(cur_page()->title, "SONG") && !ui.lock;
      press(B_GLO);
+@@ -9017,6 +9022,34 @@ static int help_fits(const char *s)
+     if (!ok || w > 224) printf("  help: \"%s\" %u hints, %d px of 224\n", s, n, w);
+     return ok && w <= 224;
+ }
++/* 1.6: SEQ > SEQUENCE with SEQ SWITCH END: KNOB 1 steps from the sequence that waits, so a far one is reached (it once stepped
++ * from the one playing: every click chose its neighbour); the card says NEXT and the target, the grid the waiting cell */
++static int test_seq_end_knob(void)
++{
++    int bad = 0, ok;
++    ui_power_on();
++    menu_put(MI_SEQSW, 1);
++    song.playing = 1; trk[0].p[P_SLEN] = 16; trk[0].seq_idx = 2;
++    go_title("SEQUENCE"); frame();
++    ok = cur_page()->graph == GR_SEQS && pb_cur[0] == 0;
++    turn(EN_K1, 1); frames(4);
++    ok &= pb_cur[0] == 0 && pb_next[0] == 2;
++    turn(EN_K1, 1); frames(4); turn(EN_K1, 1); frames(4); turn(EN_K1, 1); frames(4);
++    ok &= pb_cur[0] == 0 && pb_next[0] == 5;                /* the fourth sequence waits, not the second again */
++    turn(EN_K1, 20); frames(4);
++    ok &= pb_next[0] == 8 && pb_cur[0] == 0;                /* (no wrap: the eighth) */
++    turn(EN_K1, -30); frames(4);
++    ok &= pb_cur[0] == 0 && !pb_next[0];                    /* back to the one playing: it no longer waits */
++    trk[0].seq_idx = 15; turn(EN_K1, 3); frames(4);
++    ok &= pb_next[0] == 4;
++    seq_poll();                                              /* the last step of the sequence playing: the switch happens */
++    ok &= pb_cur[0] == 3 && !pb_next[0];
++    menu_put(MI_SEQSW, 0);
++    song.playing = 0;
++    bad += check("1.6 SEQUENCE, SEQ SWITCH END: the knob steps from the waiting sequence (far ones reachable), the last step switches", ok);
++    return bad;
++}
++
+ static int test_help(void)
+ {
+     int bad = 0, ok;
+@@ -9643,6 +9676,7 @@ int main(void)
+     bad += test_home_tracks();
+     bad += test_fx_map_columns();
+     bad += test_help();
++    bad += test_seq_end_knob();
+     bad += test_no_flash();
+ #if FELUCCA_FM4
+     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
 diff --git a/tools/build.py b/tools/build.py
 index a92334d..204c85f 100755
 --- a/tools/build.py

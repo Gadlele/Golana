@@ -997,8 +997,9 @@ static void draw_columns(void)
         char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0};
         for (c = 0; c < NTRK; c++) {
             lb[1] = (char)('1' + c);
-            sq[0] = (char)('1' + pb_cur[c]);
-            draw_column(c, lb, sq, "/8", c == song.sel ? T_ACCENT : VAL(c), (int32_t)pb_cur[c] * 1000 / 7, ICON_X_PATTERN);
+            sq[0] = (char)('1' + pb_target(c));                 /* (a waiting switch: the one it waits for, "NEXT") */
+            draw_column(c, lb, sq, pb_next[c] ? "NEXT" : "/8", c == song.sel ? T_ACCENT : VAL(c),
+                        (int32_t)pb_target(c) * 1000 / 7, ICON_X_PATTERN);
         }
         return;
     }

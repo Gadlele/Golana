@@ -197,6 +197,14 @@ static int pb_select(uint32_t t, uint32_t slot)
     return 0;
 }
 
+/* the sequence a knob step starts from: the one waiting (SEQ SWITCH END) if there is one, else the one playing. Stepping from
+ * the playing one made every step land on the same neighbour while a switch waited: a far sequence could not be reached */
+static uint32_t pb_target(uint32_t t)
+{
+    t %= NTRK;
+    return pb_next[t] ? (uint32_t)pb_next[t] - 1u : pb_cur[t];
+}
+
 /* a sequence chosen for track t (SEQ > SEQUENCE's knobs, SEQ held + C5..G5). MENU > CONTROL > SEQ SWITCH: NOW at once; END,
  * while the music plays, at the end of the sequence playing (pb_due). 0 switched, 1 waits, 2 it is the one playing (a
  * waiting switch is called off), < 0 pb_select's rc, negated */

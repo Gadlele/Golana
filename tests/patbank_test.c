@@ -288,6 +288,17 @@ int main(void)
         (void)pb_request(2, 1); trk[2].p[P_SLEN] = 16; trk[2].seq_idx = 15;
         project_save_as(0, "Q"); pb_reset_to_live();               /* (a project load / reset forgets a waiting switch) */
         ok &= !pb_next[2];
+        /* the knob steps from the one waiting, so a far sequence can be reached one step at a time */
+        reset();
+        menu_put(MI_SEQSW, 1); song.playing = 1; trk[0].p[P_SLEN] = 16; trk[0].seq_idx = 2;
+        ok &= pb_target(0) == 0;
+        for (i = 0; i < 6u; i++)
+            (void)pb_request(0, pb_target(0) + 1u);
+        ok &= pb_cur[0] == 0 && pb_next[0] == 7 && pb_target(0) == 6;       /* waiting for the seventh, the first still playing */
+        (void)pb_request(0, pb_target(0) - 4u);
+        ok &= pb_target(0) == 2 && pb_cur[0] == 0;
+        (void)pb_request(0, 0);                                            /* back to the one playing: nothing waits */
+        ok &= pb_target(0) == 0 && !pb_next[0];
         bad += check("SEQ SWITCH: NOW at once; END waits for the last step (or a wrap seen), stopped switches at once, same slot cancels", ok);
     }
 

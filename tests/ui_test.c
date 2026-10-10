@@ -9022,6 +9022,34 @@ static int help_fits(const char *s)
     if (!ok || w > 224) printf("  help: \"%s\" %u hints, %d px of 224\n", s, n, w);
     return ok && w <= 224;
 }
+/* 1.6: SEQ > SEQUENCE with SEQ SWITCH END: KNOB 1 steps from the sequence that waits, so a far one is reached (it once stepped
+ * from the one playing: every click chose its neighbour); the card says NEXT and the target, the grid the waiting cell */
+static int test_seq_end_knob(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    menu_put(MI_SEQSW, 1);
+    song.playing = 1; trk[0].p[P_SLEN] = 16; trk[0].seq_idx = 2;
+    go_title("SEQUENCE"); frame();
+    ok = cur_page()->graph == GR_SEQS && pb_cur[0] == 0;
+    turn(EN_K1, 1); frames(4);
+    ok &= pb_cur[0] == 0 && pb_next[0] == 2;
+    turn(EN_K1, 1); frames(4); turn(EN_K1, 1); frames(4); turn(EN_K1, 1); frames(4);
+    ok &= pb_cur[0] == 0 && pb_next[0] == 5;                /* the fourth sequence waits, not the second again */
+    turn(EN_K1, 20); frames(4);
+    ok &= pb_next[0] == 8 && pb_cur[0] == 0;                /* (no wrap: the eighth) */
+    turn(EN_K1, -30); frames(4);
+    ok &= pb_cur[0] == 0 && !pb_next[0];                    /* back to the one playing: it no longer waits */
+    trk[0].seq_idx = 15; turn(EN_K1, 3); frames(4);
+    ok &= pb_next[0] == 4;
+    seq_poll();                                              /* the last step of the sequence playing: the switch happens */
+    ok &= pb_cur[0] == 3 && !pb_next[0];
+    menu_put(MI_SEQSW, 0);
+    song.playing = 0;
+    bad += check("1.6 SEQUENCE, SEQ SWITCH END: the knob steps from the waiting sequence (far ones reachable), the last step switches", ok);
+    return bad;
+}
+
 static int test_help(void)
 {
     int bad = 0, ok;
@@ -9648,6 +9676,7 @@ int main(void)
     bad += test_home_tracks();
     bad += test_fx_map_columns();
     bad += test_help();
+    bad += test_seq_end_knob();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
