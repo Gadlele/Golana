@@ -106,16 +106,18 @@ static int page_cycle(void)
     press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_EVENTS && !detail_on();
     press(B_SEQ); frames(320);
+    ok &= str_eq(cur_page()->title, "SEQUENCE") && !detail_on();                /* (1.6) */
+    press(B_SEQ); frames(320);
     ok &= str_eq(cur_page()->title, "STEP") && !detail_on();
-    bad += check("SEQ: STEP -> DETAIL (the same cursor) -> AUTOMATION -> STEP", ok);
+    bad += check("SEQ: STEP -> DETAIL (the same cursor) -> AUTOMATION -> SEQUENCE (1.6) -> STEP", ok);
     go_detail();
     {
         char ti[20];
         page_title(ti);
-        ok = str_eq(ti, "DETAIL 2/3");
+        ok = str_eq(ti, "DETAIL 2/4");
     }
     ok &= help_page() && str_eq(help_page(), "[PRESETS]STEP[K1]CHANCE[K2]RATCH");
-    bad += check("  its footer title DETAIL 2/3 (not the scale), its HELP hint", ok);
+    bad += check("  its footer title DETAIL 2/4 (not the scale), its HELP hint", ok);
     return bad;
 }
 

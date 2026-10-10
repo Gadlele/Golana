@@ -154,6 +154,7 @@ static struct { uint32_t stage; } felucca_dbg;
 #include "../firmware/src/ui_input.c"
 #include "../firmware/src/ui_layer.c"
 #include "../firmware/src/upreset.c"
+#include "../firmware/src/patbank_store.c"
 #include "../firmware/src/project.c"
 
 static int check(const char *what, int ok)
@@ -1649,10 +1650,10 @@ static int test_menu_tabs(void)
             }
     }
     ui_prefs = 0;
-    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 7 6 2 5 rows), 1..8 each in a run, fit the page; tab gaps "
+    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 6 2 5 rows), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 7u && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && mtab_rows(MTAB_AUDIO) == 6u &&
                  mtab_rows(MTAB_MIDI) == 2u && MI_TAB[MI_LCLEAR] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u && MI_TAB[MI_TUNE] == MTAB_AUDIO &&   /* (1.5: LEARN CLEAR, HELP) */
                  MI_TAB[MI_MIDIIN] == MTAB_MIDI && MI_TAB[MI_INFO] == MTAB_SYSTEM && MI_INFO >= MI_VALUES);
 
@@ -2674,7 +2675,7 @@ static int test_page_cycles(void)
     ok = 1;
     for (i = 0; i < NPAGES; i++) {                       /* every page in a family its button reaches, and its LED */
         uint32_t f = PAGES[i].fam;
-        ok &= f != FAM_SEQ || PAGES[i].graph == GR_ROLL || PAGES[i].graph == GR_EVENTS;
+        ok &= f != FAM_SEQ || PAGES[i].graph == GR_ROLL || PAGES[i].graph == GR_EVENTS || PAGES[i].graph == GR_SEQS;
         ok &= f != FAM_GLO || PAGES[i].graph == GR_SONG;   /* (1.2: GLO's only page) */
         ok &= f != FAM_TRK || PAGES[i].graph == GR_TRK || str_eq(PAGES[i].title, "CLOCK");   /* HOME's: MIXER CLOCK */
         ok &= PAGES[i].graph != GR_TRK || f == FAM_TRK;
@@ -2684,7 +2685,7 @@ static int test_page_cycles(void)
     }
     for (i = 0; i < NPAGES; i++)
         ok &= !str_eq(PAGES[i].title, "PATTERN") && !str_eq(PAGES[i].title, "CHANCE") && !str_eq(PAGES[i].title, "AUTO LIST");
-    bad += check("1.2: SEQ has STEP and AUTOMATION only; SONG is GLO's only page, PHRASES SAVE's, MIXER and CLOCK HOME's "
+    bad += check("1.2: SEQ has STEP, AUTOMATION and (1.6) SEQUENCE only; SONG is GLO's only page, PHRASES SAVE's, MIXER and CLOCK HOME's "
                  "(their LED HOME)", ok);
     {   /* 1.2: GLOBAL and SYSTEM are gone; their knobs: BPM SWG CLK on HOME > CLOCK, TUNE and ROUT on no page (the MENU's),
          * MIDI SYNC CPU on none (INFO shows the USB state and the CPU) */
@@ -6592,15 +6593,19 @@ static int test_seq_tools(void)
     press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_EVENTS && str_eq(cur_page()->title, "AUTOMATION");
     press(B_SEQ); frames(320);
+    ok &= str_eq(cur_page()->title, "SEQUENCE");                               /* (1.6) */
+    press(B_SEQ); frames(320);
     ok &= str_eq(cur_page()->title, "STEP");
     press(B_SEQ); frames(320);
     press(B_SEQ); frames(320);
     ok &= cur_page()->graph == GR_EVENTS;
-    bad += check("1.2: a tap on STEP: DETAIL (1.5.1), AUTOMATION, then STEP again (three SEQ pages; the hint until the layer "
+    press(B_SEQ); frames(320);
+    ok &= cur_page()->graph == GR_SEQS && str_eq(cur_page()->title, "SEQUENCE");   /* 1.6: the fourth page */
+    bad += check("1.2: a tap on STEP: DETAIL (1.5.1), AUTOMATION, SEQUENCE (1.6), then STEP again (four SEQ pages; the hint until the layer "
                  "was opened)", ok);
     go_title("ENV"); frame();
     press(B_SEQ); frames(320);
-    ok = cur_page()->graph == GR_EVENTS;                /* (the SEQ page shown last) */
+    ok = cur_page()->graph == GR_SEQS;                  /* (the SEQ page shown last) */
     go_home(); frame();
     for (k = 0; k < NPAGES; k++)                        /* a remembered page that is no SEQ page any more: STEP */
         if (PAGES[k].graph == GR_SONG) ui.fam_last[FAM_SEQ] = (uint8_t)k;
@@ -6756,12 +6761,12 @@ static int test_seq_tools(void)
     ok &= !tl_lanes_of(TSEL, DV_SNARE) && tl_lanes_of(TSEL, DV_HATC) == 0x5555u && msg_is("SNARE CLEARED");
     ui.lane = DV_TOM;
     rng_state = 77u;
-    tl_key(11);                                         /* C5: RANDOM the lane: at least one hit */
+    tl_key(7);                                          /* F4 (1.6, was C5: C5..G5 pick the sequence): RANDOM the lane */
     ok &= tl_count(TSEL, DV_TOM) >= 1u && tl_lanes_of(TSEL, DV_KICK) == 0x1111u;
-    bad += check("  A4 / G4 / C5: the lane reversed (its accents with it), cleared, at random; the others stay", ok);
+    bad += check("  A4 / G4 / F4: the lane reversed (its accents with it), cleared, at random; the others stay", ok);
     a = leds_at(0); b2 = leds_at(250);
-    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(11)) & 1u && !(((a | b2) >> white(7)) & 1u) &&
-         ((a & b2) >> black(DV_TOM)) & 1u && ((a ^ b2) >> black(0)) & 1u && !(((a | b2) >> black(8)) & 1u);
+    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(7)) & 1u && ((a & b2) >> white(11)) & 1u &&       /* (1.6: C5 .. G5 are the sequences: the one playing lit, the rest breathe) */
+         ((a & b2) >> black(DV_TOM)) & 1u && ((a ^ b2) >> black(0)) & 1u && ((a ^ b2) >> black(8)) & 1u;
     btn_up(B_SEQ); frame();
     ui_power_on();
     tl_melody();
@@ -6949,7 +6954,7 @@ static int test_layer_lock(void)
     btn_down(B_SEQ); frames(500);
     ok &= ui.layer == LAYER_SEQ && !ui.lock;
     btn_up(B_SEQ); frame();
-    ok &= !ui.layer && !ui.lock && str_eq(cur_page()->title, "STEP");
+    ok &= !ui.layer && !ui.lock && str_eq(cur_page()->title, "SEQUENCE");
     press(B_GLO); frames(400);
     ok &= str_eq(cur_page()->title, "SONG") && !ui.lock;
     press(B_GLO);

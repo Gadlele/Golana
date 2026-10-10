@@ -992,6 +992,17 @@ static void draw_columns(void)
         for (c = 0; c < 4u; c++) draw_act_column(c, labels[c], VAL(c), icons[c]);
         return;
     }
+#if FELUCCA_PATBANK
+    if (cur_page()->graph == GR_SEQS) {                /* SEQUENCE: the sequence (1..8) each track plays, KNOB 1..4 */
+        char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0};
+        for (c = 0; c < NTRK; c++) {
+            lb[1] = (char)('1' + c);
+            sq[0] = (char)('1' + pb_cur[c]);
+            draw_column(c, lb, sq, "/8", c == song.sel ? T_ACCENT : VAL(c), (int32_t)pb_cur[c] * 1000 / 7, ICON_X_PATTERN);
+        }
+        return;
+    }
+#endif
     if (cur_page()->scope == SC_TRK) {                 /* LEVEL PAN REV MUTE of the selected track */
         const track_t *t = TSEL;
         uint32_t lvl = trk_level(song.sel);

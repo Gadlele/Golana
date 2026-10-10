@@ -82,7 +82,8 @@ static void smp_user_scan(uint32_t k)
     smp_user_gen++;
     usr_nz[k] = 0;
     slc_user_scan(k, 0);
-    if (h->magic == SMP_USER_MAGIC && h->version == 1 && h->nz && h->nz <= 16u &&
+    if (FELUCCA_USERSMP &&                         /* (the sequence banks use this flash: no user slots, patbank.c) */
+        h->magic == SMP_USER_MAGIC && h->version == 1 && h->nz && h->nz <= 16u &&
         h->data_len <= SMP_USER_SIZE - SMP_USER_DATA) {
         base = (uint32_t)(uintptr_t)(smp_user_xip(k) + SMP_USER_DATA) - (uint32_t)(uintptr_t)SMP_DATA;
         for (nz = h->nz, i = 0; i < nz; i++) {

@@ -596,7 +596,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         if (na < 1u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
         ed_b(a[0]);
-        ed_b(ed_flash_stop() || ed_smp_erase(a[0], cmd == ED_SMP_ERASE) ? 1u : 0u);
+        ed_b(!FELUCCA_USERSMP || ed_flash_stop() || ed_smp_erase(a[0], cmd == ED_SMP_ERASE) ? 1u : 0u);   /* (rc 1: no user slots with the sequence banks) */
         break;
     case ED_SMP_WRITE: {                                   /* slot, off (3 x 7 bit), pack7 data -> slot, off, rc */
         uint32_t off, len, rc = 0, took;
@@ -604,7 +604,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             return;
         off = (uint32_t)a[1] | (uint32_t)a[2] << 7 | (uint32_t)a[3] << 14;
         len = ed_unpack7(a + 4, na - 4u, ed_smp_buf, 256u);
-        if (off < SMP_USER_DATA || (off & 0xFFu) || !len || off + len > SMP_USER_SIZE)
+        if (!FELUCCA_USERSMP || off < SMP_USER_DATA || (off & 0xFFu) || !len || off + len > SMP_USER_SIZE)
             rc = 1;
         else if (usr_nz[a[0]])
             rc = 4;                                        /* slot in use: SMP_BEGIN first (voices read it) */
@@ -629,7 +629,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         if (na < 2u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
         ed_b(a[0]);
-        ed_b((uint32_t)ed_smp_end(a[0], a + 1, na - 1u));
+        ed_b(!FELUCCA_USERSMP ? 1u : (uint32_t)ed_smp_end(a[0], a + 1, na - 1u));
         break;
     case ED_SMP_INFO:                                      /* -> per slot: zones (0 = empty), name, data KiB */
         ed_b(SMP_USER_SLOTS);

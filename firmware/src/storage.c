@@ -12,6 +12,9 @@
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
  */
+#ifndef FELUCCA_PATBANK
+#define FELUCCA_PATBANK 1
+#endif
 #define ST_MAGIC 0x554C4546u                   /* "FELU" */
 #define ST_SECTOR 4096u
 #define ST_PAYLOAD_OFF 256u
@@ -27,11 +30,22 @@
  * (up_fm6.c upf_boot); the first write of the new object goes to the sector that does not hold the bank's newest
  * copy (st_save_to), so a power cut never loses both.
  * The FM6 voice bank (1.4.1, fm6_vbank.c): 0xE7000, the sector above the autosave, with a commit record of the same
- * kind (type OBJ_FM6VB, not an st_load object); a new bank is first staged in the autosave's older copy (fm6_vbank.c). */
+ * kind (type OBJ_FM6VB, not an st_load object); a new bank is first staged in the autosave's older copy (fm6_vbank.c).
+ * The sequence banks (patbank.c, FELUCCA_PATBANK, objects OBJ_PB0 ..): 0xA0000..0xD1FFF, where the user sample slots were
+ * (the build without FELUCCA_PATBANK keeps them): five stores (the four projects and the live music) of six objects. */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_UPFM6,
        OBJ_AUTOSAVE, OBJ_COUNT };
 #define OBJ_FM6VB 32u                          /* the voice bank's commit records (fm6_vbank.c; >= OBJ_COUNT: st_load
                                                 * never takes one, no object here takes its sectors) */
+#define OBJ_PB0 33u                            /* the sequence banks (patbank.c): store s (0..3 the projects A..D, 4 the live
+                                                * music), object o: OBJ_PB0 + 6 s + o. Past OBJ_FM6VB: OBJ_COUNT stays the
+                                                * count of the objects below it (st_obj_ok) */
+#define OBJ_PB_N 30u
+#define OBJ_PB_BASE 0xA0000u                   /* their first sector: copy A of OBJ_PB0 (the old user sample slots) */
+static int st_obj_ok(uint32_t obj)
+{
+    return obj < OBJ_COUNT || (FELUCCA_PATBANK && obj >= OBJ_PB0 && obj < OBJ_PB0 + OBJ_PB_N);
+}
 
 typedef struct {
     uint32_t magic;
@@ -63,6 +77,8 @@ static uint32_t st_crc32(const void *p, uint32_t n) { return ~st_crc32_add(0xFFF
 
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+    if (obj >= OBJ_PB0)
+        return OBJ_PB_BASE + (obj - OBJ_PB0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     if (obj == OBJ_SETTINGS)
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_FM6BANK || obj == OBJ_UPFM6)          /* (the same pair: see the flash map) */
@@ -78,7 +94,7 @@ static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4), section(".pool"
 
 static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
 {
-    if (obj >= OBJ_COUNT || copy > 1u)
+    if (!st_obj_ok(obj) || copy > 1u)
         return -1;
     if (st_read(st_sector(obj, copy), h, sizeof *h))
         return -1;
@@ -125,7 +141,7 @@ static int st_load(uint32_t obj, void *dst, uint32_t max)
 {
     uint32_t i;
     st_hdr_t h;
-    if (obj >= OBJ_COUNT || st_current(obj, &h) < 0 || h.len > max)
+    if (!st_obj_ok(obj) || st_current(obj, &h) < 0 || h.len > max)
         return -1;
     for (i = 0; i < h.len; i++)
         ((uint8_t *)dst)[i] = st_buf[i];
@@ -138,7 +154,7 @@ static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)
     uint32_t seq, base, off;
     int cur, rc;
     st_hdr_t h;
-    if (obj >= OBJ_COUNT || len > ST_PAYLOAD_MAX || to > 1)
+    if (!st_obj_ok(obj) || len > ST_PAYLOAD_MAX || to > 1)
         return -1;
     cur = st_current(obj, &h);
     seq = cur < 0 ? 0u : h.seq;

@@ -274,6 +274,7 @@ static void fm1_main(void)
         felucca_dbg.stage = 1;
         ui_input();
         settings_poll();                              /* queued settings save: only while stopped */
+        seq_poll();                                   /* (1.6) the sequences waiting for the end of the one playing */
         autosave_poll();                              /* (1.2) the music, stopped and idle: project.c */
         felucca_dbg.stage = 2;
         ui_leds();

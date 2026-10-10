@@ -23,6 +23,8 @@ static uint32_t up_pat_count(void);
 static uint32_t up_pat_nth(uint32_t n);
 static uint32_t up_pat_rank(uint32_t slot);
 static void up_pat_load(track_t *t, uint32_t k);
+static void seq_switch_ui(uint32_t t, uint32_t s);   /* ui_layer.c: track t plays sequence s (patbank.c) */
+static void seq_poll(void);                          /* ui_layer.c: the queued switches (SEQ SWITCH END), main loop */
 static void up_auto_name(char *b, uint32_t e, uint32_t k);   /* naming (ui_name.c) */
 static void up_ui_named(uint32_t op, uint32_t k, const char *name, uint32_t cat);
 static uint32_t up_cat(uint32_t k);
@@ -65,13 +67,15 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 /* 1.2: three more two-valued MENU settings, bits of another byte no engine uses, saved with the settings; 0 in older
  * settings = today's behaviour (append-only, as ui_prefs): bit 0 DISPLAY > SCOPE MIX (Discussion #165, fx.c scope_mix),
  * bit 1 CONTROL > STEP PREVIEW ON (Discussion #169, ui_input.c step_preview), bit 2 CONTROL > CHORD ENTRY ADD (#155,
- * ui_input.c seq_entry). 1.5: bit 3 SYSTEM > HELP ON (Discussion #156, ui_help.c). Bits 4-7 free */
+ * ui_input.c seq_entry). 1.5: bit 3 SYSTEM > HELP ON (Discussion #156, ui_help.c). 1.6: bit 4 CONTROL > SEQ SWITCH END
+ * (patbank.c: a sequence chosen while playing starts at the end of the one playing; 0 = NOW). Bits 5-7 free */
 #define ui_prefs2 (favorites.factory[15][24])
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */
 #define PREF_SCOPE_MIX (0x01u << 16)
 #define PREF_PREVIEW (0x02u << 16)
 #define PREF_CHORD_ADD (0x04u << 16)
 #define PREF_HELP (0x08u << 16)
+#define PREF_SEQ_END (0x10u << 16)
 /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
  * oscilloscope, as before), 1 TRACKS (the four tracks as rows: ui_graph.c draw_home_tracks), 2 LEVELS (1.5, #134: the
  * rows of TRACKS, and KNOB 1..4 the LEVEL of T1..T4 in place of the engine's four: home_param). A byte of its own no
@@ -355,7 +359,7 @@ static uint32_t large_kind(void)
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
     g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
-           g == GR_SLICES || g == GR_EVENTS ? LK_LABEL : LK_TALL;
+           g == GR_SLICES || g == GR_EVENTS || g == GR_SEQS ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -1576,6 +1580,7 @@ static void track_select(uint32_t i)
 #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
 #include "ui_events.c"                            /* SEQ > AUTOMATION: locks, events, CHANCE, RATCH as a list (an action page) */
 #include "midi_learn.c"                           /* MIDI LEARN (1.5): GLO + D4, a knob, a CC */
+#include "patbank.c"                              /* eight sequences per track (1.6): SEQ > SEQUENCE, SEQ held + C5..G5 */
 
 /* ---------------------------------------------------- action pages --- */
 /* Pages whose purpose is an action (SAVE > USER, PHRASES, PROJECT, TOOLS, EDIT > SLICES, SEQ > AUTOMATION): the knobs pick,

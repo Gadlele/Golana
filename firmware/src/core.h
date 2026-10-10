@@ -16,6 +16,14 @@
 #ifndef FELUCCA_SLICE
 #define FELUCCA_SLICE 1          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
 #endif
+#ifndef FELUCCA_PATBANK
+#define FELUCCA_PATBANK 1        /* eight sequences per track (patbank.c), kept in the flash the three user sample slots (USR1..3)
+                                  * had: FELUCCA_PATBANK=0 builds the earlier firmware, with the user samples */
+#endif
+#ifndef FELUCCA_USERSMP
+#define FELUCCA_USERSMP (!FELUCCA_PATBANK)   /* the three user sample slots: off with the sequence banks (their flash); the host tests of the
+                                              * sample engines build with FELUCCA_USERSMP=1 */
+#endif
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built
                                   * by default; replaced by FM6, its sounds convert (fm4_convert.c) */

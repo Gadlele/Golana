@@ -846,6 +846,15 @@ static int project_save_as(uint32_t slot, const char *name)
         ui_message("STOP TO SAVE");                     /* sequencer (storage_hw.c): only while stopped */
         return 1;
     }
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+    if (flash_ok) {                                    /* the sequences first: the record is what makes the slot */
+        int rc = pb_store_save(slot & 3u, (1u << PB_NOBJ) - 1u);
+        if (rc) {
+            ui_message(rc == 3 ? "AUTOMATION FULL" : "SAVE ERROR");
+            return 2;
+        }
+    }
+#endif
     project_capture(p);
     if (name) {
         memset(p->name, 0, sizeof p->name);
@@ -1034,6 +1043,9 @@ static int project_restore_runtime(const project_t *input)
         pat_sig[k] = ~steps_sig(t);                     /* a project's steps are the user's */
     }
     undo_depth--;
+#if FELUCCA_PATBANK
+    pb_reset_to_live();                                 /* (the sequences: the loaded music is sequence 1; a store fills the rest) */
+#endif
     sync_reload = 1;
     ui.force = 1;
     ui_message("LOADED");
@@ -1050,6 +1062,10 @@ static void project_load(uint32_t slot)
     if (!project_restore_runtime(&proj_scratch)) {
         proj_cur = (uint8_t)(slot & 3u);
         pat_from_set((slot & 3u) + 1u);
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+        if (flash_ok)
+            (void)pb_store_load(slot & 3u);             /* (the project's other sequences, and the one that plays) */
+#endif
     }
 }
 
@@ -1239,6 +1255,10 @@ static uint32_t autosave_sig(void)
         if (i != G_SLOT && i != G_NAME && i != G_LOAD && i != G_SAVE)
             h = as_mix(h, &song.g[i], sizeof song.g[i]);
     h = as_mix(h, &motion, sizeof motion);
+#if FELUCCA_PATBANK
+    pb_sync_all();                                      /* (the sequences: what the playing ones changed is in pb_gen) */
+    h = as_mix(h, &pb_gen, sizeof pb_gen);
+#endif
     h = as_mix(h, &chain_config, sizeof chain_config);
     return as_mix(h, proj_name, sizeof proj_name);
 }
@@ -1277,6 +1297,12 @@ static void autosave_poll(void)
         return;
     as.last = fm1_ms;
     as.wrote = 1;
+#if FELUCCA_PATBANK
+    if (pb_flush_live()) {                              /* the sequences first (their store, the changed objects) */
+        as.err = 1;
+        return;
+    }
+#endif
     project_capture(&proj_scratch);
     proj_wire_gen++;
     as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0;
@@ -1301,6 +1327,9 @@ static int autosave_boot(int allowed)
         if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
             proj_bound(&proj_scratch);
             if (!project_restore_runtime(&proj_scratch)) {
+#if FELUCCA_PATBANK
+                (void)pb_store_load(PB_LIVE);
+#endif
                 ui_message("RESTORED");
                 rc = 1;
             }

@@ -204,6 +204,7 @@ static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../../firmware/src/storage.c"
 #include "../../firmware/src/upreset.c"
+#include "../../firmware/src/patbank_store.c"
 #include "../../firmware/src/project.c"
 
 /* ------------------------------------------------- main.c and its HAL --- */

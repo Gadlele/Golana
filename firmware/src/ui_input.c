@@ -471,6 +471,14 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
 
 /* MIXER page: KNOB 1 LEVEL, 2 PAN, 3 REV send, 4 MUTE of the selected track (right = ON, left = OFF: the
  * track itself is ALGORITHM's, on every page). Pattern length stays on SEQ. */
+#if FELUCCA_PATBANK
+/* SEQ > SEQUENCE: KNOB k turns track k's sequence, 1..8 (no wrap) */
+static void seqs_edit(uint32_t slot, int32_t steps)
+{
+    int32_t n = (int32_t)pb_cur[slot % NTRK] + steps;
+    seq_switch_ui(slot % NTRK, (uint32_t)clamp(n, 0, (int32_t)PB_N - 1));
+}
+#endif
 static void tracks_edit(uint32_t slot, int32_t steps)
 {
     track_t *t = TSEL;
@@ -940,7 +948,7 @@ static void edit_param(uint32_t slot, int32_t steps)
             r->repeat = (uint8_t)clamp((int32_t)r->repeat + steps, 1, 16);
         return;
     }
-    if (chain_busy() && (pg->scope == SC_STEP || pg->graph == GR_STEPS ||
+    if (chain_busy() && (pg->scope == SC_STEP || pg->graph == GR_STEPS || pg->graph == GR_SEQS ||
         0)) {
         ui_message("STOP TO EDIT"); return;
     }
@@ -948,6 +956,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         step_edit(slot, steps);
         return;
     }
+#if FELUCCA_PATBANK
+    if (pg->graph == GR_SEQS) {
+        seqs_edit(slot, steps);
+        return;
+    }
+#endif
     if (pg->scope == SC_TRK) {
         tracks_edit(slot, steps);
         return;

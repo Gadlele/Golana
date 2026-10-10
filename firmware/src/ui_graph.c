@@ -1880,6 +1880,41 @@ static void home_track_row(uint32_t c)
     tr_meter(TR_MX, TR_MY, c, cs, sel ? T_INK : T_MID, bg);
     cv_blit(3, (uint32_t)y);
 }
+#if FELUCCA_PATBANK
+/* SEQ > SEQUENCE: under each track's card its eight sequences, one over the other (12 px, 2 apart): the one playing in the
+ * accent, the ones with notes raised, the empty ones flat; the selected track's brighter */
+static uint32_t sqs_sig[NTRK];
+static void draw_seqs(void)
+{
+    uint32_t c, r;
+    if (ui.force) {
+        draw_gaps(graph_y(), graph_h());
+        memset(sqs_sig, 0, sizeof sqs_sig);
+    }
+    for (c = 0; c < NTRK; c++) {
+        uint32_t sel = c == song.sel, mask = 0, sig;
+        for (r = 0; r < PB_N; r++)
+            mask |= (uint32_t)pb_filled(c, r) << r;
+        sig = (mask | (uint32_t)pb_cur[c] << 8 | sel << 12 | (uint32_t)pb_next[c] << 16) * 2654435761u + 1u;
+        if (!ui.force && sig == sqs_sig[c])
+            continue;
+        sqs_sig[c] = sig;
+        cv_begin(CARD_W, H_GRAPH, T_BG);
+        for (r = 0; r < PB_N; r++) {
+            int32_t y = 4 + 14 * (int32_t)r;
+            uint32_t on = r == pb_cur[c], full = (mask >> r) & 1u;
+            uint32_t nx = r + 1u == pb_next[c];             /* (waiting for the end of the one playing) */
+            uint16_t fill = on ? T_ACCENT : nx ? T_MID : full ? T_RAISE : T_SURF;
+            uint16_t ink = on || nx ? T_INK : full ? (sel ? T_TEXT : T_MID) : T_DIM;
+            char b[2] = {(char)('1' + r), 0};
+            cv_rrect(0, y, CARD_W, 12, 3, fill, T_BG);
+            GFX_HOOK_ALIGN(0, y, CARD_W, y + 12, AL_HV, "sequence cell digit centred");
+            cv_text_in(0, y + CAP_IN(S, 12), CARD_W, &AF_S, b, ink, fill);
+        }
+        cv_blit((uint32_t)CARD_X(c), Y_GRAPH);
+    }
+}
+#endif
 static void draw_home_tracks(void)
 {
     uint32_t c;
@@ -2227,6 +2262,12 @@ static void draw_graph(void)
         draw_tracks();
         return;
     }
+#if FELUCCA_PATBANK
+    if (!ui.home && pg->graph == GR_SEQS) {
+        draw_seqs();
+        return;
+    }
+#endif
     if (ui.home && home_tracks()) {                  /* MENU > HOME TRACKS (1.3) */
         draw_home_tracks();
         return;

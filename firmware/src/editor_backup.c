@@ -50,7 +50,8 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
         if (upf_valid(&upf)) *len = sizeof upf;
         return (const uint8_t *)&upf;
     }
-    if (id >= 32u && id < 32u + SMP_USER_SLOTS) {
+    if (FELUCCA_USERSMP && id >= 32u && id < 32u + SMP_USER_SLOTS) {   /* (no user slots with the sequence banks)
+        */
         uint32_t k = id - 32u;
         const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(k);
         if (usr_nz[k] && h->magic == SMP_USER_MAGIC && h->data_len <= SMP_USER_SIZE - SMP_USER_DATA)

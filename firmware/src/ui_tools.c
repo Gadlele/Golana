@@ -11,8 +11,8 @@
  * A step that held something and is empty after loses its locks (as EDIT's step clear); REVERSE and SHIFT move the
  * steps' automation and locks with them. RANDOM and COOK draw from libc.c rng(): no seed is kept, each press
  * differs. A sequence of ties reversed keeps its note first: N T T -> N T T at the mirrored place */
-enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_GAP, TL_LCLR, TL_LREV, TL_LFILL, TL_LRND,
-       TL_N };
+enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_LRND, TL_LCLR, TL_LREV, TL_LFILL, TL_GAP,
+       TL_N };   /* (1.6: the lane's RANDOM moved from C5 to F4, where the gap was: C5..G5 pick the sequence, patbank.c) */
 
 /* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
 static struct { step_t step[NSTEP]; motion_store_t mo; } tl_open __attribute__((section(".pool")));
