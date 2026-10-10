@@ -8,7 +8,14 @@ static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 static const uint16_t REV_COMB[4] = {1116, 1188, 1277, 1356};
 static const uint16_t REV_AP[2] = {556, 441};
-static int16_t rev_comb[1116 + 1188 + 1277 + 1356] __attribute__((section(".pool")));
+/* ROOM's delay line holds Q15.14 -- see the note on rev_room.  Aliased with SPRING's and
+ * HALL's existing int16 view of the same buffer, so their code is untouched. */
+static union {
+    int32_t c32[1116 + 1188 + 1277 + 1356];
+    int16_t spl[1116 + 1188 + 1277 + 1356];
+} rev_comb_u __attribute__((section(".pool")));
+#define rev_comb (rev_comb_u.spl)
+#define comb32 (rev_comb_u.c32)
 static union {                          /* ROOM's allpasses; SPRING's allpass chain (int32: no clamps) */
     int16_t ap[556 + 441];
     int32_t sp[(556 + 441) / 2];
@@ -36,6 +43,7 @@ static struct {
  * on it), plus a second, quieter pickup at three quarters (a shorter spring beside it: denser). SIZE sets
  * the loop's length (30 .. 60 ms) and its decay; DAMP the loop's low-pass. The allpasses' states: 4
  * samples each (int32), in rev_ap's memory. Changing the model fades the old one's block out and clears both buffers. */
+#define REV_LP_SHIFT 14  /* the ROOM line and comb_lp are Q15.14 */
 #define SP_LEN 4096u                     /* the loop's line in rev_comb (4937 samples) */
 #define SP_MASK (SP_LEN - 1u)
 #define SP_N 10u                         /* allpass stages */
@@ -239,6 +247,21 @@ static uint32_t delay_samples(void)
     return s < 16u ? 16u : s >= DLY_LEN ? DLY_LEN - 1u : s;
 }
 
+/* ROOM (G_RTYPE 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out.
+ *
+ * The comb line keeps the loop's value at higher precision than 16 bits.  One LSB of the
+ * line is an ABSOLUTE step (-90.3 dBFS at 16 bits): as the tail decays the error stays
+ * put while the signal shrinks beneath it, so the granulation grows relative to what you
+ * hear, and at low DAMP the residual holds the loop open as a limit cycle.  Keeping the
+ * damping's fraction (the (int64_t) multiply below) leaves the line as the comb's only
+ * quantiser, and the x2 level puts the stored signal up where the line's LSB is a finer
+ * relative step.  The line is wider in the pool and the loop reads and writes it directly.
+ *
+ * The allpass is deliberately left 16-bit -- see its own note.
+ *
+ * Measured (host build, single C5 tap, SIZE 100 %): DAMP 100 tail 1.9 s -> 4.7 s to exact
+ * silence; DAMP 30 a -90.3 dBFS limit cycle that never ended -> exact silence.  rev_room
+ * stays at its instruction budget. */
 /* ROOM (G_RTYPE 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out */
 static __attribute__((noinline)) void rev_room(const int32_t *rev_in, int32_t *out, uint32_t n)
 {
@@ -246,28 +269,36 @@ static __attribute__((noinline)) void rev_room(const int32_t *rev_in, int32_t *o
     int32_t size = 25000 + song.g[G_RSIZE] * 50, damp = 32767 - song.g[G_RDAMP] * 200;
     for (i = 0; i < n; i++) {
         int32_t a = 0;
-        int16_t *c = rev_comb;
-        int32_t in = mulq15(rev_in[i], 2580);           /* 1/8 at -4 dB: level as before the allpass fix */
+        int32_t *bc = comb32;
+        int32_t in = mulq15(rev_in[i], 5160);          /* unit scale, 1/4: the loop runs x2 */
         for (k = 0; k < 4u; k++) {
-            int32_t o = c[fx.comb_i[k]];
-            fx.comb_lp[k] = o + mulq15(fx.comb_lp[k] - o, 32767 - damp);
-            c[fx.comb_i[k]] = (int16_t)clamp(in + mulq15(fx.comb_lp[k], size), -32768, 32767);
+            int32_t o = bc[fx.comb_i[k]];               /* Q15.14 out of the line */
+            int64_t prod;
+            fx.comb_lp[k] = o + (int32_t)((((int64_t)(fx.comb_lp[k] - o)) * (32767 - damp)) >> 15);
+            prod = (int64_t)fx.comb_lp[k] * size;
+            {
+                int32_t q = (int32_t)(prod >> 15);
+                bc[fx.comb_i[k]] = (in << REV_LP_SHIFT) + q;
+            }
             if (++fx.comb_i[k] >= REV_COMB[k])
                 fx.comb_i[k] = 0;
             a += o;
-            c += REV_COMB[k];
+            bc += REV_COMB[k];
         }
-        c = rev_ap;
-        for (k = 0; k < 2u; k++) {
-            int32_t o = c[fx.ap_i[k]];
-            int32_t v = a + (o >> 1);
-            c[fx.ap_i[k]] = (int16_t)clamp(v, -32768, 32767);
-            a = o - a;                                  /* Freeverb: out = buf - in (o - v is a notch comb) */
-            if (++fx.ap_i[k] >= REV_AP[k])
-                fx.ap_i[k] = 0;
-            c += REV_AP[k];
+        {   int16_t *c = rev_ap;                        /* the allpass stays 16-bit: its
+                                                         * truncation is the loss that makes
+                                                         * the loop reach exact silence */
+            for (k = 0; k < 2u; k++) {
+                int32_t o = c[fx.ap_i[k]] << REV_LP_SHIFT;
+                int32_t v = a + (o >> 1);
+                c[fx.ap_i[k]] = (int16_t)clamp(v >> REV_LP_SHIFT, -32768, 32767);
+                a = o - a;
+                if (++fx.ap_i[k] >= REV_AP[k])
+                    fx.ap_i[k] = 0;
+                c += REV_AP[k];
+            }
         }
-        out[i] += a;
+        out[i] += a >> 15;
     }
 }
 
