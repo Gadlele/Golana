@@ -110,6 +110,17 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
   (everything but the FM6 voice bank: keep its .syx file);
   return to the official firmware; Felucca itself running in the browser
 
+## Unreleased
+
+- **Live part switching A–D:** SAVE > PROJECT, choose a slot, LOAD, OCT+. All four tracks launch the selected
+  part at **track 1's loop boundary**, with its steps, timing, parameter locks and automation. The current
+  sounds, tempo and clock source stay in place.
+- **Save parts while playing:** SAVE > PROJECT can save separate snapshots to A–D while playback and recording
+  continue. They are immediately available for live LOAD and marked **RAM ONLY** until **STOP automatically
+  commits them to flash**.
+
+Details: [live parts and recording](docs/LIVE_PATTERNS.md).
+
 ## New in 1.5.1
 
 - **SEQ > DETAIL** (Discussion #199): SEQ now goes STEP, **DETAIL**, AUTOMATION. DETAIL is the STEP page (the same
@@ -434,7 +445,9 @@ For more details, see [On AI-Assisted Development and Responsibility](https://gi
   [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111),
   [zednaked](https://github.com/zednaked) (ratchets, #100),
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
-  [renebohne](https://github.com/renebohne) (MIDI Program Change, #179)
+  [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
+  [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
+  (live part switching and saves)
 
 ## Licence
 

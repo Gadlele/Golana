@@ -478,6 +478,8 @@ EXPORT void web_test_heavy(void)
 }
 
 EXPORT uint32_t web_test_user_preset(uint32_t i) { return (uint32_t)up_used(i); }
+EXPORT uint32_t web_test_project_used(uint32_t i) { return i < 4u && project_used(i); }
+EXPORT uint32_t web_test_project_ram_mask(void) { return project_ram_mask(); }
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }

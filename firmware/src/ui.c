@@ -7,6 +7,7 @@
 static int project_save(uint32_t slot);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
+static uint32_t project_pattern_queue(uint32_t slot);
 static int project_used(uint32_t slot);
 static uint32_t chain_prepare(void);
 static int up_used(uint32_t k);              /* user presets: upreset.c */
@@ -433,6 +434,7 @@ static void ui_message(const char *s) { ui_say(s, ""); }
 #define MSG_NO_SAMPLE MSG_NOFILE "NO SAMPLE"
 
 static int chain_busy(void) { return chain.running || chain.armed; }
+static uint32_t project_ram_mask(void);          /* A-D changed in RAM, not yet committed to flash */
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */
 static int transport_busy(void)

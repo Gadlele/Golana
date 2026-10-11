@@ -31,6 +31,11 @@ static struct {
     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
     uint8_t rec;
     uint32_t carry;
+    /* Live project-pattern launch: source[0] is a staging buffer only while
+     * SONG is idle. Main loop publishes pending after the complete copy; the
+     * audio ISR consumes it at track 1's loop boundary. No extra pattern RAM. */
+    volatile uint8_t live_pending, live_notice;
+    uint8_t live_applied, live_engine[NTRK];
 } chain;
 /* a silent lane: its steps (empty: nothing plays) and its timing (a 4/4 bar of 1/16: the section's length when every
  * track is silent) */

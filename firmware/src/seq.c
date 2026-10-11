@@ -846,6 +846,7 @@ static void seq_stop(void)
 {
     uint32_t i;
     song.playing = 0;
+    chain.live_pending = chain.live_applied = 0;
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
     cin_flush = 0;
     memset(cin_n, 0, sizeof cin_n);
@@ -1100,7 +1101,7 @@ static void seq_tick(track_t *t, uint32_t n)
             seq_nd_due(t, period, len, cur_len, n);
         if (t->seq_pos < cur_len && t->seq_pos != 0x7FFFFFFFu + n)
             break;
-        t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? (chain.running ? chain.carry : 0u) : t->seq_pos - cur_len;
+        t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? ((chain.running | chain.live_applied) ? chain.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
         rec_hold(t, t->seq_idx, len);
         if (t->p[P_SQNT] && !t->nd_fired)
@@ -1199,6 +1200,45 @@ static int32_t click_beat_now(void)
 }
 
 /* everything that happens between two rendered blocks */
+/* Pattern launch uses the same overshoot handling as SONG, but copies into
+ * the editable working tracks. All four restart together at track 1's end.
+ * Audio ISR only: no flash access, allocations or project/sound reload here. */
+static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
+{
+    track_t *clock = &trk[0];
+    uint32_t length, k, slot = chain.live_pending;
+    if (!slot || !n || !song.playing || chain.running || chain.armed ||
+        clock->seq_pos >= 0x7FFFFFFFu || clock->seq_idx + 1u != (uint32_t)clock->p[P_SLEN]) return;
+    length = step_samples(clock, div_samples((uint32_t)clock->p[P_SDIV]), clock->seq_idx);
+    if (clock->seq_pos + n < length) return;
+    for (k = 0; k < NTRK; k++)
+        if (chain.live_engine[k] != trk[k].eng_req) {
+            chain.live_pending = 0;
+            chain.live_notice = 5;      /* engine changed after queuing: refuse unsafe automation */
+            return;
+        }
+    chain.carry = clock->seq_pos + n - length; /* SONG is idle; reuse its boundary overshoot */
+    motion_end();
+    song.rec = 0;                       /* a queued launch must not record into the new pattern */
+    for (k = 0; k < NTRK; k++) {
+        track_t *t = &trk[k];
+        seq_release(t);                 /* releases old tied notes, including MIDI note-offs */
+        memcpy(t->step, chain.source[0].step[k], sizeof t->step);
+        memcpy(&t->p[P_SLEN], chain.source[0].timing[k], sizeof chain.source[0].timing[k]);
+        t->p[P_SQNT] = chain.source[0].qnt[k];
+        t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
+        t->seq_pos = 0x7FFFFFFFu;
+        t->rh_n = t->rskip_n = t->rat_left = 0;
+        t->nd_late = t->nd_early = ND_NONE;
+        t->nd_fired = 0;
+    }
+    motion = chain.source[0].motion;
+    motion_begin();
+    chain.live_applied = 1;
+    chain.live_notice = (uint8_t)slot;
+    chain.live_pending = 0;
+}
+
 static void events_block(uint32_t n)
 {
     uint32_t i, pr, seq_n = n;
@@ -1304,9 +1344,11 @@ static void events_block(uint32_t n)
     }
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
+    project_pattern_tick(seq_n);
     chain_tick(seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);
+    chain.live_applied = 0;
     if (cin_flush)
         cin_record();
     if (song.playing)

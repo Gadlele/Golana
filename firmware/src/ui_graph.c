@@ -1217,6 +1217,7 @@ static uint32_t graph_signature(void)
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
         h += graph_pname_sig;
+        h ^= project_ram_mask() * 2654435761u;
     }
     if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the rows, the one selected, + ADD's place, PLAY,
                                                       * QUANTIZE */
@@ -1552,12 +1553,18 @@ static void graph_slots(void)
     uint32_t i;
     for (i = 0; i < 4u; i++) {
         int32_t y = 12 + (int32_t)i * 26;
-        char b[4];
+        char b[4], label[20];
         int sel = (int32_t)i + 1 == song.g[G_SLOT], used = graph_project_used(i);
         const char *n = graph_project_name(i);
         b[0] = (char)('A' + i);
         b[1] = 0;
-        list_row(y, sel, b, T_MID, !used ? "--" : n[0] ? n : "USED", used ? T_TEXT : T_DIM, 232);
+        const char *value = !used ? "--" : n[0] ? n : "USED";
+        if (used && (project_ram_mask() & (1u << i))) {
+            str_cpy(label, "RAM: ", sizeof label);
+            str_cpy(label + 5, value, sizeof label - 5);
+            value = label;
+        }
+        list_row(y, sel, b, T_MID, value, used ? T_TEXT : T_DIM, 232);
     }
 }
 /* MIXER page: four SURF columns, one under each card: the track number on its cushion (in the accent:

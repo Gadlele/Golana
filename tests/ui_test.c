@@ -13,7 +13,7 @@
  *              Long REC never clears. On STEP, armed and playing: keys do not write the
  *              cursor step. With the ARP on, the arp's notes are recorded, not the keys.
  *   MIDI IN    MENU > MIDI > MIDI IN (ROUT): CH1-4 (channels 5..16 ignored) / SEL, note-offs follow their note-ons.
- *   SAVE       refused while playing ("STOP TO SAVE"); a used slot asks OVERWRITE? (OCT+ / OCT-).
+ *   SAVE       projects capture A-D in RAM while playing; user presets need STOP.
  *   ACTIONS    PATTERNS, USER, PROJECT, TOOLS: the knobs pick, OCT+ does it, OCT- cancels or goes
  *              HOME, on release, never both together; the OCT LEDs (OCT- lit, OCT+ blinks).
  *   TRACKS     the PRESETS knob does nothing there; KNOB 1 is MUTE.
@@ -184,6 +184,7 @@ static void ui_power_on(void)
     memset(pat_last, 0, sizeof pat_last);
     memset(pat_from, 0, sizeof pat_from);                /* (the header's slot letter: none) */
     memset(proj_slot, 0, sizeof proj_slot);
+    project_ram_set(0);
     memset(up_bank, 0, sizeof up_bank);
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
@@ -895,17 +896,20 @@ static int test_save(void)
     ui_power_on();
     song.playing = 1;
     project_save(0);
-    bad += check("project save while playing: refused, STOP TO SAVE", !project_used(0) && msg_is("STOP TO SAVE"));
+    bad += check("project save while playing: RAM snapshot and warning", project_used(0) &&
+                 project_ram_mask() == 1u && msg_is("RAM ONLY") && !strcmp(ui.msg2, "STOP TO SAVE"));
     bad += check("user preset save while playing: refused", up_store(0, "X") == 2 && !up_used(0));
     song.playing = 0;
     transport_req = 1;
-    project_save(0);
-    bad += check("a pending PLAY cannot save a project", !project_used(0) && msg_is("STOP TO SAVE"));
+    project_save(1);
+    bad += check("a pending PLAY saves a project in RAM", project_used(1) && project_ram_mask() == 3u && msg_is("RAM ONLY"));
     bad += check("a pending PLAY cannot save a user preset", up_store(0, "X") == 2 && !up_used(0));
     transport_req = 0;
     chain.armed = 1;
     bad += check("a pending SONG cannot save a user preset", up_store(0, "X") == 2 && !up_used(0));
     chain.armed = 0;
+    memset(proj_slot, 0, sizeof proj_slot);
+    project_ram_set(0);
     song.playing = 1;
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].graph == GR_SLOTS)
@@ -917,8 +921,9 @@ static int test_save(void)
     turn(EN_K4, 1);                               /* SAVE picked */
     bad += check("PROJECT KNOB 4 picks SAVE, saves nothing", ui.act == 4u && !project_used(0) && !ui.msg_t);
     press(B_OCTUP);
-    bad += check("OCT+ while playing: STOP TO SAVE, no NAME", msg_is("STOP TO SAVE") && !project_used(0) &&
-                 song.g[G_SAVE] == 0 && !name_on());
+    bad += check("OCT+ while playing: NAME opens without stopping", name_on() && nm.kind == NK_PROJ_SAVE &&
+                 !project_used(0) && song.playing);
+    press(B_OCTDN);
     stop_transport();
     turn(EN_K4, 1);
     press(B_OCTUP);
@@ -2456,7 +2461,7 @@ static int test_chain(void)
     press(B_OCTUP);
     bad += check("SONG OCT+ on release starts, pending start blocks SAVE", chain.armed && transport_req == 1);
     project_save(3);
-    bad += check("SONG pending start cannot write a project", msg_is("STOP TO SAVE") && !project_used(3));
+    bad += check("SONG pending start cannot write a project", msg_is("STOP SONG FIRST") && !project_used(3));
     press(B_PLAY); events_block(32);
     bad += check("SONG PLAY cancels a pending start", !chain.running && !chain.armed && !song.playing);
     uint32_t old_count = chain_config.count;

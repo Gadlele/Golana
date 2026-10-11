@@ -137,6 +137,40 @@ c.render(600);
 check("a fresh instance with the kept sectors has it; one without does not",
       b.ex.web_test_user_preset(0) === 1 && c.ex.web_test_user_preset(0) === 0);
 
+// ---- four parts saved from the real PROJECT UI during playback, committed only after STOP
+const live = await device(null);
+live.render(1000);
+live.ex.web_test_heavy();
+for (let i = 0; i < 4; i++) live.tap(B.SAVE);    // USER -> PRESETS -> PHRASES -> PROJECT
+live.tap(B.PLAY);
+const writesBeforeLive = live.ex.web_flash_writes_count();
+let liveOk = true;
+for (let slot = 0; slot < 4; slot++) {
+  if (slot) live.turn(EN.K1, 1);
+  live.turn(EN.K4, 1);                          // pick SAVE
+  live.tap(B.OCTUP);                           // NAME
+  live.tap(B.OCTUP);                           // capture current part
+  liveOk &&= live.ex.web_playing() === 1 && live.ex.web_test_project_used(slot) === 1 &&
+             live.ex.web_test_project_ram_mask() === (1 << (slot + 1)) - 1 &&
+             live.ex.web_flash_writes_count() === writesBeforeLive;
+}
+check("PROJECT UI: live-save A-D without stopping or any flash write", liveOk);
+live.turn(EN.K1, -3);                          // newly saved A, available without STOP
+live.turn(EN.K3, 1);
+live.tap(B.OCTUP);
+live.render(100);
+check("PROJECT UI: live LOAD accepts a newly RAM-saved slot", live.ex.web_playing() === 1 &&
+      live.ex.web_test_project_ram_mask() === 15 && live.ex.web_flash_writes_count() === writesBeforeLive);
+live.tap(B.PLAY);
+live.render(200);
+check("STOP: all A-D RAM snapshots committed automatically", live.ex.web_playing() === 0 &&
+      live.ex.web_test_project_ram_mask() === 0 && live.ex.web_flash_writes_count() > writesBeforeLive);
+const liveSaved = storeSectors(new Uint8Array(live.mem.buffer, live.ex.web_nor(), live.ex.web_nor_size()));
+const liveReboot = await device(liveSaved);
+liveReboot.render(600);
+check("A-D remain saved in a fresh emulator instance", [0, 1, 2, 3].every((i) => liveReboot.ex.web_test_project_used(i) === 1) &&
+      liveReboot.ex.web_test_project_ram_mask() === 0);
+
 // ---- deterministic: the same gestures, the same samples
 async function song() {
   const d = await device(null);

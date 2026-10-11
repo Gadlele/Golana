@@ -1071,11 +1071,18 @@ static void act_do(void)
         ui.act = 0;
     switch (id) {
     case G_LOAD:
-        project_load(k);
+        if (song.playing) {
+            uint32_t rc = project_pattern_queue(k);
+            char msg[] = "QUEUED A";
+            msg[7] = (char)('A' + k);
+            ui_message(rc == 1u ? "EMPTY SLOT" : rc == 2u ? "STOP SONG FIRST" :
+                       rc == 3u ? "ENGINE MISMATCH" : rc == 4u ? "STOPPED" : msg);
+        } else
+            project_load(k);
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
-        if (transport_busy())
-            ui_message("STOP TO SAVE");
+        if (chain_busy())
+            ui_message("STOP SONG FIRST");
         else if (project_used(k))
             confirm_open(CF_OVR_PROJ, k);
         else
@@ -1372,6 +1379,17 @@ static void ui_input(void)
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
+    if (chain.live_notice) {
+        uint32_t launched;
+        fm1_irq_off();
+        launched = chain.live_notice;
+        chain.live_notice = 0;
+        fm1_irq_on();
+        if (launched <= 4u) pat_from_set(launched);
+        undo.keep = 0;                 /* an undo from the previous pattern must not replace this one */
+        ui.force = 1;
+        { char msg[] = "PLAYING A"; msg[8] = (char)('A' + launched - 1u); ui_message(launched == 5u ? "ENGINE CHANGED" : msg); }
+    }
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
 #if !FELUCCA_FM4
