@@ -110,6 +110,40 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
   (everything but the FM6 voice bank: keep its .syx file);
   return to the official firmware; Felucca itself running in the browser
 
+## Unreleased
+
+- **Live part switching A–D:** SAVE > PROJECT, choose a slot, LOAD, OCT+. All four tracks launch the selected
+  part at **track 1's loop boundary**, with its steps, timing, parameter locks and automation. The current
+  sounds, tempo and clock source stay in place.
+- **Save parts while playing:** SAVE > PROJECT can save separate snapshots to A–D while playback and recording
+  continue. They are immediately available for live LOAD and marked **RAM ONLY** until **STOP automatically
+  commits them to flash**.
+- **STEP REC during playback:** on a melodic SEQ > STEP page, **hold SEQ and tap REC**. KNOB 1 / PRESETS selects
+  the input step; panel keys enter notes/chords while the playhead continues independently. Repeat SEQ + REC
+  to switch to LIVE REC; a normal REC tap disarms.
+- **Record FX-special performances:** LIVE REC now captures all fourteen white-key FX specials, including
+  REV THROW and ECHO THROW, with their press/release timing. Short taps, FX LATCH and holds across steps or
+  loop boundaries replay with the pattern and are saved with A–D. FX events share the existing 128-record
+  pool with motion and locks; older firmware refuses projects containing these new FX events.
+- **Global FX track:** hold HOME, open CONTROL and choose **FX TRACK T1–T4** (default T1). That track records
+  and replays global FX using its LEN/DIV, even while another sound track is selected. The setting saves
+  with the project; the effects process the master mix.
+- **Project INIT without rebooting:** SAVE > PROJECT now offers **INIT** on KNOB 2; OCT+ opens confirmation
+  and OCT+ again initializes. It restores boot sounds, empty sequences/automation and project defaults.
+  Stored A–D, USER sounds, FM6 banks, MIDI-learn mappings and device preferences remain intact.
+- **DUP x2:** select a track, **hold SEQ and press F4** to duplicate its steps, locks, automation and FX and
+  double LEN, up to **64 steps**. During playback the current loop finishes before the doubled pattern starts.
+  SAVE held undoes/redoes the operation.
+- **Edit FX start and duration:** SEQ > AUTOMATION lists FX ON/OFF as independent events. KNOB 1 / PRESETS
+  selects one, **KNOB 2** moves its step and **KNOB 4** adjusts its fine position (0–255/256), leaving the other
+  event in place. Changes work during pattern playback; SAVE held undoes/redoes each gesture. End an
+  unfinished FX recording on that track before editing.
+- **Delete one FX performance:** EDIT on an FX OFF removes it and the nearest preceding ON of that effect;
+  EDIT on ON removes it and the next OFF. Pairing follows fine timing across the loop boundary on the same
+  track. Pairing follows the current timeline: ON 3, ON 5, OFF 7 pairs OFF 7 with ON 5, leaving ON 3.
+  Without an opposite edge in the active loop, only the selected row is deleted; rows beyond LEN are
+  also deleted alone. SAVE held restores both events in one undo.
+
 ## New in 1.5.1
 
 - **SEQ > DETAIL** (Discussion #199): SEQ now goes STEP, **DETAIL**, AUTOMATION. DETAIL is the STEP page (the same
@@ -434,7 +468,10 @@ For more details, see [On AI-Assisted Development and Responsibility](https://gi
   [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111),
   [zednaked](https://github.com/zednaked) (ratchets, #100),
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
-  [renebohne](https://github.com/renebohne) (MIDI Program Change, #179)
+  [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
+  [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
+  (live part switching and saves, STEP REC during playback, FX-special recording and start/duration editing,
+  global FX track, project INIT and DUP x2)
 
 ## Licence
 

@@ -13,7 +13,7 @@
  *              Long REC never clears. On STEP, armed and playing: keys do not write the
  *              cursor step. With the ARP on, the arp's notes are recorded, not the keys.
  *   MIDI IN    MENU > MIDI > MIDI IN (ROUT): CH1-4 (channels 5..16 ignored) / SEL, note-offs follow their note-ons.
- *   SAVE       refused while playing ("STOP TO SAVE"); a used slot asks OVERWRITE? (OCT+ / OCT-).
+ *   SAVE       projects capture A-D in RAM while playing; user presets need STOP.
  *   ACTIONS    PATTERNS, USER, PROJECT, TOOLS: the knobs pick, OCT+ does it, OCT- cancels or goes
  *              HOME, on release, never both together; the OCT LEDs (OCT- lit, OCT+ blinks).
  *   TRACKS     the PRESETS knob does nothing there; KNOB 1 is MUTE.
@@ -168,7 +168,9 @@ static void ui_power_on(void)
     uint32_t i;
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
+    memset(&motion, 0, sizeof motion);
     memset(&chain, 0, sizeof chain);
+    step_record_mask = 0;
     chain_defaults(&chain_config);
     memset(&ui, 0, sizeof ui);
     page_over = 0;                                /* (no layer's knobs; roll_settle's test page gone) */
@@ -184,6 +186,7 @@ static void ui_power_on(void)
     memset(pat_last, 0, sizeof pat_last);
     memset(pat_from, 0, sizeof pat_from);                /* (the header's slot letter: none) */
     memset(proj_slot, 0, sizeof proj_slot);
+    project_ram_set(0);
     memset(up_bank, 0, sizeof up_bank);
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
@@ -220,6 +223,10 @@ static void ui_power_on(void)
     memset(chord_last, 0, sizeof chord_last);
     perf_held = perf_act = kb_layer = perf_mask = 0;      /* the FX layer: nothing held */
     perf_latched = 0;
+    memset(perf_motion, 0, sizeof perf_motion);
+    memset(motion_fx_owner, 0, sizeof motion_fx_owner);
+    memset(motion_fx_next, 0, sizeof motion_fx_next);
+    motion_fx_recording = 0;
     memcpy((void *)perf_map, PF_DEF, sizeof PF_DEF);    /* .. its default key map (the settings' 0), no key's effect */
     perf_remap = 0;
     memset(kb_fx, 0, sizeof kb_fx);
@@ -895,17 +902,20 @@ static int test_save(void)
     ui_power_on();
     song.playing = 1;
     project_save(0);
-    bad += check("project save while playing: refused, STOP TO SAVE", !project_used(0) && msg_is("STOP TO SAVE"));
+    bad += check("project save while playing: RAM snapshot and warning", project_used(0) &&
+                 project_ram_mask() == 1u && msg_is("RAM ONLY") && !strcmp(ui.msg2, "STOP TO SAVE"));
     bad += check("user preset save while playing: refused", up_store(0, "X") == 2 && !up_used(0));
     song.playing = 0;
     transport_req = 1;
-    project_save(0);
-    bad += check("a pending PLAY cannot save a project", !project_used(0) && msg_is("STOP TO SAVE"));
+    project_save(1);
+    bad += check("a pending PLAY saves a project in RAM", project_used(1) && project_ram_mask() == 3u && msg_is("RAM ONLY"));
     bad += check("a pending PLAY cannot save a user preset", up_store(0, "X") == 2 && !up_used(0));
     transport_req = 0;
     chain.armed = 1;
     bad += check("a pending SONG cannot save a user preset", up_store(0, "X") == 2 && !up_used(0));
     chain.armed = 0;
+    memset(proj_slot, 0, sizeof proj_slot);
+    project_ram_set(0);
     song.playing = 1;
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].graph == GR_SLOTS)
@@ -917,8 +927,9 @@ static int test_save(void)
     turn(EN_K4, 1);                               /* SAVE picked */
     bad += check("PROJECT KNOB 4 picks SAVE, saves nothing", ui.act == 4u && !project_used(0) && !ui.msg_t);
     press(B_OCTUP);
-    bad += check("OCT+ while playing: STOP TO SAVE, no NAME", msg_is("STOP TO SAVE") && !project_used(0) &&
-                 song.g[G_SAVE] == 0 && !name_on());
+    bad += check("OCT+ while playing: NAME opens without stopping", name_on() && nm.kind == NK_PROJ_SAVE &&
+                 !project_used(0) && song.playing);
+    press(B_OCTDN);
     stop_transport();
     turn(EN_K4, 1);
     press(B_OCTUP);
@@ -1652,7 +1663,7 @@ static int test_menu_tabs(void)
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 7 6 2 5 rows), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 7u && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && mtab_rows(MTAB_AUDIO) == 6u &&
                  mtab_rows(MTAB_MIDI) == 2u && MI_TAB[MI_LCLEAR] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u && MI_TAB[MI_TUNE] == MTAB_AUDIO &&   /* (1.5: LEARN CLEAR, HELP) */
                  MI_TAB[MI_MIDIIN] == MTAB_MIDI && MI_TAB[MI_INFO] == MTAB_SYSTEM && MI_INFO >= MI_VALUES);
 
@@ -2456,7 +2467,7 @@ static int test_chain(void)
     press(B_OCTUP);
     bad += check("SONG OCT+ on release starts, pending start blocks SAVE", chain.armed && transport_req == 1);
     project_save(3);
-    bad += check("SONG pending start cannot write a project", msg_is("STOP TO SAVE") && !project_used(3));
+    bad += check("SONG pending start cannot write a project", msg_is("STOP SONG FIRST") && !project_used(3));
     press(B_PLAY); events_block(32);
     bad += check("SONG PLAY cancels a pending start", !chain.running && !chain.armed && !song.playing);
     uint32_t old_count = chain_config.count;
@@ -6760,7 +6771,7 @@ static int test_seq_tools(void)
     ok &= tl_count(TSEL, DV_TOM) >= 1u && tl_lanes_of(TSEL, DV_KICK) == 0x1111u;
     bad += check("  A4 / G4 / C5: the lane reversed (its accents with it), cleared, at random; the others stay", ok);
     a = leds_at(0); b2 = leds_at(250);
-    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(11)) & 1u && !(((a | b2) >> white(7)) & 1u) &&
+    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(11)) & 1u && ((a ^ b2) >> white(7)) & 1u &&
          ((a & b2) >> black(DV_TOM)) & 1u && ((a ^ b2) >> black(0)) & 1u && !(((a | b2) >> black(8)) & 1u);
     btn_up(B_SEQ); frame();
     ui_power_on();

@@ -742,7 +742,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_EDIT_ANALOG, S_EDIT_DIGITAL, S_OP_ENV, S_EDIT_WHEEL, S_EDIT_SAMPLE, S_EDIT_GRAIN, S_EDIT_PHYS,
        S_ALG1, S_ALG2, S_ALG3, S_ALG4, S_ALG5, S_ALG6, S_ALG7, S_ALG8, S_OP_LEVEL,
        S_FM6_ALG1, S_FM6_ALG5, S_FM6_ALG22, S_FM6_ALG32, S_FM6_OP, S_FM6_OP_FIXED, S_FM6_OP2, S_FM6_OP_ENV, S_FM6_OP_ENV_REL,
-       S_CONFIRM_SEQ, S_CONFIRM_PROJ, S_CONFIRM_USER, S_CONFIRM_PAT, S_CONFIRM_MOTION, S_CONFIRM_ERASE,
+       S_CONFIRM_SEQ, S_CONFIRM_PROJ, S_CONFIRM_USER, S_CONFIRM_PAT, S_CONFIRM_MOTION, S_CONFIRM_ERASE, S_CONFIRM_INIT,
        S_MENU, S_MENU_SPEAKER, S_ABOUT, S_ABOUT_REC, S_ABOUT_CREDITS, S_ABOUT_END, S_UBOOT, S_CALIBRATION, S_SPLASH,
        S_BATT0, S_BATT1, S_BATT2, S_BATT3, S_BATT_USB, S_MOTION_REC, S_MOTION_OFF, S_MOTION_CARD, S_SONG_HOME,
        S_FX_PEEK, S_FX_HELD, S_FX_WAIT, S_FX_HARM, S_FX_MOD, S_FX_ASSIGN, S_MENU_HOLD, S_MENU_LEDS, S_MENU_END, S_MENU_SYSTEM, S_MENU_SLIDE, S_REVERB,
@@ -754,6 +754,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_USER_FOOT, S_SLICES_BREAK, S_SLICES_USR, S_SLICES_NOFILE,
        S_ROLL_EMPTY, S_ROLL_ACID, S_ROLL_CHORDS, S_ROLL_TIES, S_ROLL_LEN32, S_ROLL_HIGH, S_ROLL_LOW, S_ROLL_WIDE, S_ROLL_PLAYING,
        S_ROLL_LOCKS, S_ROLL_LOCK_HELD, S_DRUM_LOCKS, S_DRUM_LOCK_HELD, S_MOTION_LOCKS, S_AUTO_LIST, S_AUTO_LIST_ADD, S_AUTO_LIST_DRUM,
+       S_AUTO_FX_ON, S_AUTO_FX_OFF,
        S_AUTO_NUDGE, S_AUTO_QNT, S_AUTO_ADD_NUDGE, S_ROLL_LEN, S_AUTO_VEL, S_AUTO_ADD_VEL, S_LFO2, S_REC_LAYER, S_REC_LAYER_SET, S_REC_LAYER_SONG,
        S_COUNTIN, S_COUNTIN2, S_MENU_AUDIO, S_HEAD_PLAY_REC, S_HEAD_REC_OTHER, S_HEAD_BPM_TURN, S_HEAD_BPM_LOCK,
        S_HEAD_BPM_LOCKED, S_HEAD_GLO_TURN, S_HEAD_DOWNBEAT, S_HEAD_BEAT_2,
@@ -769,7 +770,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
     "voice", "clock", "menu_midi", "edit_analog", FELUCCA_FM4 ? "edit_digital" : "edit_fm6", "op_env", "edit_wheel", "edit_sample",
     "edit_grain", "edit_phys", "alg_1", "alg_2", "alg_3", "alg_4", "alg_5", "alg_6", "alg_7", "alg_8", "op_level", "fm6_alg_01", "fm6_alg_05", "fm6_alg_22", "fm6_alg_32", "fm6_op", "fm6_op_fixed", "fm6_op2", "fm6_op_env", "fm6_op_env_rel", "confirm_seq", "confirm_project", "confirm_user", "confirm_pattern",
-    "confirm_motion", "confirm_erase", "menu", "menu_speaker", "about", "about_rec", "about_credits", "about_end", "uboot", "calibration", "splash",
+    "confirm_motion", "confirm_erase", "confirm_init", "menu", "menu_speaker", "about", "about_rec", "about_credits", "about_end", "uboot", "calibration", "splash",
     "batt_0", "batt_1", "batt_2", "batt_3", "batt_usb", "motion_rec", "motion_off", "motion_card", "song_home",
     "perform_peek", "perform_held", "perform_wait", "perform_harm", "perform_mod", "perform_assign", "menu_hold", "menu_leds", "menu_end", "menu_system", "menu_slide", "reverb_spring",
     "layer_glo_peek", "layer_glo_active", "layer_glo_ext", "layer_scl_peek", "layer_scl_active", "layer_edit_peek",
@@ -781,6 +782,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "user_foot", "slices_break", "slices_usr", "slices_nofile",
     "roll_empty", "roll_acid", "roll_chords", "roll_ties", "roll_len32_p2", "roll_high", "roll_low", "roll_wide", "roll_playing",
     "roll_locks", "roll_lock_held", "drum_locks", "drum_lock_held", "motion_locks", "auto_list", "auto_list_add", "auto_list_drum",
+    "auto_fx_on", "auto_fx_off",
     "auto_nudge", "auto_quantize", "auto_add_nudge", "roll_len", "auto_vel", "auto_add_vel", "lfo2", "layer_rec", "layer_rec_set", "layer_rec_song",
     "countin", "countin_2bars", "menu_audio", "head_play_rec", "head_rec_other", "head_bpm_turn", "head_bpm_lock",
     "head_bpm_locked", "head_glo_turn", "head_downbeat", "head_beat_2",
@@ -1226,6 +1228,7 @@ static void setup(int s)
     case S_CONFIRM_USER: song.playing = 0; up_store(6, "A VERY LONG SOUND NAME"); ui.confirm = CF_OVR_USER; ui.confirm_trk = 6; break;
     case S_CONFIRM_PAT: ui.confirm = CF_LOAD_PAT; ui.confirm_trk = 0; ui.ppick = 4; break;
     case S_CONFIRM_MOTION: ui.confirm = CF_CLEAR_MOTION; ui.confirm_trk = 3; break;
+    case S_CONFIRM_INIT: ui.confirm = CF_INIT_PROJECT; break;
     case S_CONFIRM_ERASE: song.playing = 0; up_store(6, "A VERY LONG SOUND NAME"); ui.confirm = CF_ERASE_USER; ui.confirm_trk = 6; break;
     case S_MENU: ui.menu = 1; ui.menu_sel = 0; song.rec = 1; break;
     case S_MENU_SPEAKER: ui.menu = 1; ui.menu_sel = MI_LOWCUT; settings.lowcut = 2; break;
@@ -1493,6 +1496,13 @@ static void setup(int s)
         motion_set_lock(TSEL, 11, P_LD_FLT, 50); motion_set_lock(TSEL, 13, P_DLY, 80); motion_set_lock(TSEL, 15, P_GLIDE, 60);
         go_page(GR_EVENTS); ui.ev_row = 5; ui.hot_col = 3; ui.hot_t = 30;   /* (row 0: PLAY, 1: QUANTIZE) */
         break;
+    case S_AUTO_FX_ON:
+    case S_AUTO_FX_OFF:
+        TSEL->p[P_SLEN] = 64;
+        motion_fx_put(TSEL, 62, PF_ETHR, 255, 1); motion_fx_put(TSEL, 63, PF_ETHR, 255, 0);
+        go_page(GR_EVENTS); ui.ev_row = s == S_AUTO_FX_ON ? 2 : 3;
+        ui.hot_col = 3; ui.hot_t = 30;
+        break;
     case S_AUTO_LIST_ADD: ui.cursor = 4; go_page(GR_EVENTS); break;
     case S_AUTO_LIST_DRUM: {
         uint32_t i;
@@ -1690,6 +1700,18 @@ static void sweep_columns(void)
         cur_name = name;
         draw(-1);
         lint();
+    }
+    {   /* All fourteen FX names, both edge cards, maximum step and unsigned phase. */
+        for (uint32_t fx = 0; fx < PF_NFX; fx++) {
+            state(); pal(UI_GREY_INDEX); TSEL->p[P_SLEN] = 64;
+            motion_fx_put(TSEL, 62, fx, 255, 1); motion_fx_put(TSEL, 63, fx, 255, 0);
+            go_page(GR_EVENTS);
+            cur_name = large_on ? "LARGE FX edge cards" : "FX edge cards";
+            for (uint32_t row = 2; row < 4; row++) {
+                ui.ev_row = (uint16_t)row; ui.hot_col = 3; ui.hot_t = 30;
+                draw(-1); lint(); nsweep++;
+            }
+        }
     }
     {   /* FM6's operator pages (ui_fm6op.c): every operator, stage and value of each byte KNOB 2..4 edit (COARSE in both
          * modes), then the page with its chart / envelope */
@@ -1898,7 +1920,7 @@ static void align_sweeps(void)
         }
         ui.layer = 0; ui.hot_t = 0; ui_prefs = 0;
         cur_name = st ? "sweep LINE: dialogs" : "sweep FLAT: dialogs";
-        for (i = CF_CLEAR_SEQ; i <= CF_ERASE_USER; i++)
+        for (i = CF_CLEAR_SEQ; i <= CF_INIT_PROJECT; i++)
             for (k = 0; k < 4u; k++) {
                 ui.confirm = (uint8_t)i; ui.confirm_trk = (uint8_t)k;
                 draw_confirm();

@@ -279,6 +279,12 @@ static void step_set_nudge(step_t *s, int32_t v)
  * value holds until another one changes it. One record per (track, step, id), of either kind */
 #define MOTION_LOCK 0x80u
 #define MOTION_ID(e) ((uint32_t)(e)->param & 0x7Fu)
+/* fourteen master FX edges use the otherwise unused ids 114..127.
+ * place keeps track/step; value is an unsigned 1/256-step phase, bit 7 of
+ * param means release (not a lock). No larger RAM or project event pool. */
+#define MOTION_FX_FIRST 114u
+#define MOTION_IS_FX(e) (MOTION_ID(e) >= MOTION_FX_FIRST)
+_Static_assert(P_COUNT <= MOTION_FX_FIRST, "FX event ids must not overlap sound parameters");
 typedef struct { uint8_t place, param; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
 _Static_assert(sizeof(motion_store_t) == 388u, "motion disk layout (FUN10)");

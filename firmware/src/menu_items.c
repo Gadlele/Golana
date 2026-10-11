@@ -14,7 +14,7 @@
  * GLO > SYSTEM), the values the project holds and saves as before (no format change; a project load brings its own);
  * nothing of theirs is in the settings record (MI_PROJECT: menu_get / menu_put read and write song.g) */
 enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_SCOPE, MI_HOME, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_SCLLED,
-       MI_PREVIEW, MI_CHADD, MI_LOWCUT, MI_USB,
+       MI_PREVIEW, MI_CHADD, MI_FXTRACK, MI_LOWCUT, MI_USB,
        MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_MIDIIN, MI_LCLEAR, MI_SERIAL, MI_RESTORE, MI_HELP, MI_PANEL, MI_INFO,
        MI_ABOUT, MI_COUNT };
                                                        /* (1.1: the metronome's rows in AUDIO; 1.2: RESTORE LAST in
@@ -23,9 +23,9 @@ enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_SCOPE, MI_H
                                                         * 1.3: HOME in DISPLAY; 1.5: HELP in SYSTEM) */
 #define MI_VALUES MI_PANEL
 static int menu_valued(uint32_t row) { return row < MI_VALUES && row != MI_LCLEAR; }   /* (a row with a value) */
-#define MI_PROJECT(row) ((row) == MI_TUNE || (row) == MI_MIDIIN)   /* the project's values (song.g), not settings */
+#define MI_PROJECT(row) ((row) == MI_TUNE || (row) == MI_MIDIIN || (row) == MI_FXTRACK)   /* the project's values (song.g), not settings */
 static const char *const MI_NAME[MI_COUNT] = {"COLOR", "STYLE", "LARGE", "ANIM", "LEDS", "SCREEN OFF", "SCOPE", "HOME", "HOLD", "KNOB ACCEL",
-                                              "FX LATCH", "BPM LOCK", "SCALE LEDS", "STEP PREVIEW", "CHORD ENTRY",
+                                              "FX LATCH", "BPM LOCK", "SCALE LEDS", "STEP PREVIEW", "CHORD ENTRY", "FX TRACK",
                                               "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE",
                                               "MIDI IN", "LEARN CLEAR", "USB SERIAL", "RESTORE LAST", "HELP", "CALIBRATION", "INFO",
                                               "ABOUT"};
@@ -46,6 +46,7 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_CONTROL, MTAB_CONTROL, MTAB_CONTROL, MTAB_CONTROL,                 /* HOLD KNOB ACCEL FX LATCH BPM LOCK */
     MTAB_CONTROL,                                                           /* SCALE LEDS (1.2) */
     MTAB_CONTROL, MTAB_CONTROL,                                             /* STEP PREVIEW, CHORD ENTRY (1.2) */
+    MTAB_CONTROL, /* FX TRACK: project owner, T1..T4 */
     MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
                                                                              * COUNT-IN */
     MTAB_AUDIO,                                                             /* TUNE (1.2) */
@@ -146,7 +147,7 @@ static const menu_flag_t *menu_flag(uint32_t row)
 static uint32_t menu_n(uint32_t row)
 {
     return row == MI_COLOR ? NPALETTES : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
-           row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_COUNT : row == MI_SCROFF ? NELEM(SCROFF_N) :
+           row == MI_HOLD || row == MI_FXTRACK ? 4u : row == MI_LEDS ? LEDS_COUNT : row == MI_SCROFF ? NELEM(SCROFF_N) :
            row == MI_TUNE ? TUNE_N : row == MI_MIDIIN ? NELEM(N_ROUTE) : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT : 2u;
 }
 static uint32_t menu_get(uint32_t row)
@@ -160,6 +161,7 @@ static uint32_t menu_get(uint32_t row)
     case MI_STYLE: return ui_style == ST_LINE;
     case MI_LOWCUT: return settings.lowcut % 3u;
     case MI_HOLD: return settings_hold % 4u;
+    case MI_FXTRACK: return motion_fx_track();
     case MI_SCROFF: return scr_get();
     case MI_ANIM: return ui_prefs & PREF_ANIM_OFF ? 1u : (ui_idle & 1u) ? 2u : 0u;
     case MI_HOME: return ui_home_view < HV_COUNT ? ui_home_view : HV_SCOPE;
@@ -183,6 +185,7 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     case MI_STYLE: return STYLE_N[v & 1u];
     case MI_LOWCUT: return SPK_EQ[v % 3u];
     case MI_HOLD: return HOLD_N[v & 3u];
+    case MI_FXTRACK: { static const char *const names[] = {"T1", "T2", "T3", "T4"}; return names[v & 3u]; }
     case MI_CLICK: return CLICK_N[v % 3u];
     case MI_CLKLVL: return CLKLVL_N[v % 3u];
     case MI_COUNTIN: return COUNTIN_N[v % 3u];
@@ -229,6 +232,7 @@ static void menu_put(uint32_t row, uint32_t v)
     case MI_STYLE: ui_style = (uint8_t)(v ? ST_LINE : ST_FLAT); break;   /* (drawn so from the next frame) */
     case MI_LOWCUT: settings.lowcut = v; fx_lowcut = (uint8_t)v; break;
     case MI_HOLD: settings_hold = (uint8_t)v; break;
+    case MI_FXTRACK: motion_fx_set_track(v); ui.force = 1; break;
     case MI_SCROFF: scr_put(v); break;                 /* (read every frame: ui.c scr_frame) */
     case MI_ANIM:                                      /* (read where they are used, every frame) */
         ui_prefs = (uint8_t)(v == 1u ? ui_prefs | PREF_ANIM_OFF : ui_prefs & ~PREF_ANIM_OFF);

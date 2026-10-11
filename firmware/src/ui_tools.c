@@ -3,7 +3,7 @@
 /* Felucca 1.2: the SEQ TOOLS layer's actions (ui_layer.c: SEQ held, on every page). Included by ui_layer.c. The white
  * keys from F3 (TL_*):
  *   F3 CLEAR  G3 REVERSE  A3 SHIFT <  B3 SHIFT >       the whole sequence
- *   C4 RANDOM D4 COOK     E4 BEAT (DRUM)                 new / a little changed
+ *   C4 RANDOM D4 COOK     E4 BEAT (DRUM) F4 DUP x2      new / a little changed / doubled
  *   G4 CLEAR  A4 REVERSE  B4 FILL  C5 RANDOM             the selected lane (DRUM: ui.lane, black keys 1..8 pick it)
  * Each works on the selected track's steps 1..LEN (the steps past LEN stay) and is one undo: SAVE held swaps back
  * the copy taken just before it (ui.c undo, UNDO_PAT; unlike a load the track's automation stays), so after a few
@@ -11,7 +11,7 @@
  * A step that held something and is empty after loses its locks (as EDIT's step clear); REVERSE and SHIFT move the
  * steps' automation and locks with them. RANDOM and COOK draw from libc.c rng(): no seed is kept, each press
  * differs. A sequence of ties reversed keeps its note first: N T T -> N T T at the mirrored place */
-enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_GAP, TL_LCLR, TL_LREV, TL_LFILL, TL_LRND,
+enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_DUP, TL_LCLR, TL_LREV, TL_LFILL, TL_LRND,
        TL_N };
 
 /* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
@@ -22,7 +22,7 @@ static uint32_t tl_rnd(uint32_t n) { return n ? rng() % n : 0u; }
 static int tl_gate(const step_t *s) { return s->time == ST_NOTE && s->n; }
 static uint32_t tl_lane(const step_t *s, uint32_t l) { return (step_lanes(s) >> l) & 1u; }
 /* place p's action is there for this track (the lane row and BEAT: DRUM only) */
-static int tl_cell(const track_t *t, uint32_t p) { return p < TL_N && p != TL_GAP && (p < TL_BEAT || drum_track(t)); }
+static int tl_cell(const track_t *t, uint32_t p) { return p < TL_N && (p < TL_BEAT || p == TL_DUP || drum_track(t)); }
 
 /* the undo copy of t as it is now (ui.c load_begin, but the automation is copied and stays): one action */
 static void tl_undo_take(track_t *t)
@@ -43,6 +43,74 @@ static void tl_undo_take(track_t *t)
     undo.from_h = pat_from_h[i];
     undo.patn = pat_last[i];
     motion_snapshot_track(t, &undo.motion_backup);
+}
+
+/* DUP x2: preflight the shared pool, including reserved releases. Replace only
+ * the destination range, preserve raw FX edge order/phase, and publish steps,
+ * motion and LEN together. An open recorded FX hold has no release to copy yet.
+ * Failures leave both the pattern and the previous undo untouched. */
+static const char *tl_duplicate(track_t *t)
+{
+    static char b[24];
+    char n[4];
+    uint32_t len = tl_len(t), k = trk_index(t), f = motion_guard(), src = 0, dst = 0, i, count;
+    if (len > NSTEP / 2u) {
+        motion_unguard(f);
+        ui_message("MAX 64 STEPS");
+        return 0;
+    }
+    for (i = 0; i < PF_NFX; i++)
+        if (motion_fx_owner[i] == k + 1u) {
+            motion_unguard(f);
+            ui_message("RELEASE FX FIRST");
+            return 0;
+        }
+    for (i = 0; i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        if ((e->place >> 6) != k) continue;
+        uint32_t step = e->place & 63u;
+        src += step < len;
+        dst += step >= len && step < 2u * len;
+    }
+    if (motion.count - dst + src + motion_fx_reserved() > MOTION_MAX) {
+        motion_unguard(f);
+        ui_message("AUTOMATION FULL");
+        return 0;
+    }
+    tl_undo_take(t);
+    count = 0;
+    for (i = 0; i < motion.count; i++) {
+        motion_event_t e = motion.event[i];
+        uint32_t step = e.place & 63u;
+        if ((e.place >> 6) != k || step < len || step >= 2u * len)
+            motion.event[count++] = e;
+    }
+    motion.count = (uint8_t)count;
+    for (i = 0; i < count; i++) {
+        motion_event_t e = motion.event[i];
+        if ((e.place >> 6) == k && (e.place & 63u) < len) {
+            e.place = (uint8_t)(e.place + len);
+            motion.event[motion.count++] = e;
+        }
+    }
+    memset(motion.event + motion.count, 0, (MOTION_MAX - motion.count) * sizeof motion.event[0]);
+    motion_fx_meta(&motion);
+    memcpy(t->step + len, t->step, len * sizeof t->step[0]);
+    if (song.playing) {
+        (void)seq_loop_len(t);                         /* discard a stale extension after a LEN edit */
+        if (!seq_extend_end[k] && t->seq_pos < 0x7FFFFFFFu)
+            seq_extend_end[k] = (uint8_t)len;
+        seq_extend_target[k] = (uint8_t)(2u * len);
+    }
+    t->p[P_SLEN] = (int16_t)(2u * len);
+    motion_unguard(f);
+    str_cpy(b, "T", sizeof b);
+    fmt_int(n, (int32_t)(k + 1u)); str_cpy(b + str_len(b), n, sizeof b - str_len(b));
+    str_cpy(b + str_len(b), ": ", sizeof b - str_len(b));
+    fmt_int(n, (int32_t)len); str_cpy(b + str_len(b), n, sizeof b - str_len(b));
+    str_cpy(b + str_len(b), " -> ", sizeof b - str_len(b));
+    fmt_int(n, (int32_t)(2u * len)); str_cpy(b + str_len(b), n, sizeof b - str_len(b));
+    return b;
 }
 
 /* steps 1..len of t that are not empty (a REST); after the action the ones emptied lose their locks */
@@ -339,6 +407,8 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
     int drum = drum_track(t);
     const char *msg = 0;
     l %= NLANE;
+    if (p == TL_DUP)
+        return tl_duplicate(t);
     if (p == TL_COOK) {                                 /* (nothing there: nothing to cook, no undo copy) */
         for (i = 0; i < len; i++)
             n += drum ? (uint32_t)__builtin_popcount(step_lanes(&t->step[i])) : (uint32_t)tl_gate(&t->step[i]);

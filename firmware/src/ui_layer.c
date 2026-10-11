@@ -101,7 +101,7 @@ static struct {
     uint8_t dt_l, dt_hint, dtap;       /* #83: the layer of the last tap that opened a page (0 none), its hint said; the
                                         * press now armed is that tap's second (a double tap) */
     uint32_t dt_ms;                    /* .. when that tap was let go (fm1_ms) */
-    struct { uint8_t home, page, act, seq, fam[FAM_COUNT], rec, go; } nv;   /* .. the page it left (put back by the
+    struct { uint8_t home, page, act, seq, fam[FAM_COUNT], rec, step_rec, go; } nv;   /* .. the page it left (put back by the
                                         * lock); REC: the arming before its tap, the transport that tap started */
 } lys;
 #define LY_QUIET_MS 250u
@@ -208,7 +208,10 @@ static void layer_lock(uint32_t l, uint32_t now)
     if (lys.dt_hint || l == LAYER_REC)
         ui.msg_t = 0;                                   /* (the first tap's "HOLD [..] QUICK", REC's) */
     if (l == LAYER_REC) {                               /* REC: the arming as before the first tap, and the */
+        uint32_t f = motion_guard();
         song.rec = lys.nv.rec;                          /* transport it started stopped again */
+        step_record_mask = lys.nv.step_rec;
+        motion_unguard(f);
         if (lys.nv.go && transport_req == 1u)
             transport_req = 0;
         else if (lys.nv.go && (song.playing || seq_counting()))
@@ -313,6 +316,7 @@ static void layer_tap(uint32_t l)
     lys.nv.seq = song.seq_mode;
     memcpy(lys.nv.fam, ui.fam_last, sizeof lys.nv.fam);
     lys.nv.rec = song.rec;
+    lys.nv.step_rec = step_record_mask;
     if (l == LAYER_REC) {                               /* REC: arms / disarms (no page); said nothing: no double tap */
         uint32_t idle = !song.playing && !seq_counting() && transport_req != 1u;
         acted = !rec_tap();
@@ -761,6 +765,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                     ui_rec_prefs = (uint8_t)lys.v[0];
                     rp_apply();
                 } else {
+                    seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
                     for (k = 0; k < 4u; k++)
                         t->p[P_SLEN + k] = lys.v[k];
                 }
@@ -1025,8 +1030,8 @@ static void layer_edit(void)                            /* the engines from F3, 
  * track the lanes of black keys 1..8 under them (the selected one: the selection's fill). A melodic track: the two
  * rows of the sequence's tools only */
 static const uint8_t TL_ICON[TL_N] = {ICON_CLEAR, ICON_X_REVERSE, ICON_X_LEFT, ICON_X_RIGHT, ICON_PROB, ICON_W_SH,
-    ICON_DRUM, 0, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB};
-static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", 0,
+    ICON_DRUM, ICON_STEPS, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB};
+static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", "DUP x2",
     "CLR", "REV", "FILL", "RND"};
 static void layer_seq(void)
 {

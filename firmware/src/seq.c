@@ -48,6 +48,7 @@ static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen
                                           * wakes it (silent, no layer, its release nothing) */
 static uint8_t last_note = 60;
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 restart (from the UI) */
+static volatile uint8_t step_record_mask; /* transient per-track STEP REC; never live-write at the playhead */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
 static volatile uint8_t midi_hint;       /* MIDI IN played track n - 1, which is not the selected one (the UI says so) */
 
@@ -206,7 +207,7 @@ static void arp_remove(track_t *t, uint32_t note)
 #define ND_NONE 0u                      /* track_t nd_late / nd_early: nothing latched (seq_tick; else its seq_pos + 1) */
 static void rec_note(track_t *t, uint32_t note, uint32_t vel);
 static void rec_release(track_t *t, uint32_t note);
-static int rec_on(const track_t *t) { return ((song.rec >> trk_index(t)) & 1u) && song.playing && !chain.running; }
+static int rec_on(const track_t *t) { return (((song.rec & ~step_record_mask) >> trk_index(t)) & 1u) && song.playing && !chain.running; }
 
 #include "motion.c"
 
@@ -557,7 +558,7 @@ static void rec_hold(track_t *t, uint32_t idx, uint32_t len)
     uint32_t k;
     if (!t->rh_n)
         return;
-    if (!((song.rec >> trk_index(t)) & 1u) || t->rh_ties + 1u >= len) {
+    if (!(((song.rec & ~step_record_mask) >> trk_index(t)) & 1u) || t->rh_ties + 1u >= len) {
         t->rh_n = 0;                                /* disarmed, or the whole pattern is this note */
         return;
     }
@@ -594,7 +595,7 @@ static void rec_release(track_t *t, uint32_t note)
 static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t i = trk_index(t), k;
-    if (cin_left != 1u || cin_pos < click_beat_len() / 2u || !((song.rec >> i) & 1u) || t->p[P_AMODE])
+    if (cin_left != 1u || cin_pos < click_beat_len() / 2u || !(((song.rec & ~step_record_mask) >> i) & 1u) || t->p[P_AMODE])
         return;
     for (k = 0; k < cin_n[i] && cin_note[i][k] != note; k++)
         ;
@@ -686,9 +687,11 @@ static __attribute__((noinline)) void perf_key_remap(void)
         kb_fx[k] = (uint8_t)(e + 1u);
         if (o < PF_N && ((perf_latched >> o) & 1u)) {
             perf_latched &= ~PF_BIT(o);
+            motion_fx_capture(o, 0);
             if (e < PF_N) {
                 perf_latched |= PF_BIT(e);
                 perf_ord[e] = ++perf_seq;
+                motion_fx_capture(e, 1);
             }
         }
     }
@@ -807,9 +810,24 @@ static void keyboard_block(void)
 }
 
 /* -------------------------------------------------------- sequencer --- */
+/* DUP x2 publishes the editable/savable pattern immediately, but the current
+ * pass finishes at its old end. No step/clock restart; only eight runtime bytes,
+ * never part of a saved project. A manual LEN edit cancels the temporary end. */
+static uint8_t seq_extend_end[NTRK], seq_extend_target[NTRK];
+static uint32_t seq_loop_len(const track_t *t)
+{
+    uint32_t k = trk_index(t), len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u;
+    if (!seq_extend_end[k]) return len;
+    if (seq_extend_target[k] != len)
+        seq_extend_end[k] = seq_extend_target[k] = 0;
+    return seq_extend_end[k] ? seq_extend_end[k] : len;
+}
 static void seq_start(void)
 {
     uint32_t i;
+    memset(seq_extend_end, 0, sizeof seq_extend_end);
+    memset(seq_extend_target, 0, sizeof seq_extend_target);
+    motion_fx_close();
     motion_begin();
     chain_start();
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
@@ -845,7 +863,11 @@ static void seq_release(track_t *t)
 static void seq_stop(void)
 {
     uint32_t i;
+    memset(seq_extend_end, 0, sizeof seq_extend_end);
+    memset(seq_extend_target, 0, sizeof seq_extend_target);
+    motion_fx_close();
     song.playing = 0;
+    chain.live_pending = chain.live_applied = 0;
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
     cin_flush = 0;
     memset(cin_n, 0, sizeof cin_n);
@@ -1091,8 +1113,7 @@ static void seq_tick(track_t *t, uint32_t n)
     if (!song.playing)
         return;
     period = div_samples((uint32_t)t->p[P_SDIV]);
-    len = (uint32_t)t->p[P_SLEN];
-    len = len ? len : 1u;
+    len = seq_loop_len(t);
     t->seq_pos += n;
     for (;;) {
         uint32_t cur_len = step_samples(t, period, t->seq_idx);
@@ -1100,14 +1121,22 @@ static void seq_tick(track_t *t, uint32_t n)
             seq_nd_due(t, period, len, cur_len, n);
         if (t->seq_pos < cur_len && t->seq_pos != 0x7FFFFFFFu + n)
             break;
-        t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? (chain.running ? chain.carry : 0u) : t->seq_pos - cur_len;
+        if (t->seq_pos < 0x7FFFFFFFu)
+            motion_fx_tick(t, chain_motion(t), cur_len); /* include the old step's tail before wrapping */
+        t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? ((chain.running | chain.live_applied) ? chain.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
+        if (!t->seq_idx && seq_extend_end[trk_index(t)]) {
+            seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
+            len = seq_loop_len(t);
+        }
         rec_hold(t, t->seq_idx, len);
         if (t->p[P_SQNT] && !t->nd_fired)
             seq_play(t, t->seq_idx, period);        /* QUANTIZE ON: every step on its start, as before 1.2 */
         else
             seq_nd_start(t, period, len);
+        motion_fx_step(t, chain_motion(t));
     }
+    motion_fx_tick(t, chain_motion(t), step_samples(t, period, t->seq_idx));
     if (t->rat_left)
         seq_ratchet(t, period);
 }
@@ -1199,6 +1228,48 @@ static int32_t click_beat_now(void)
 }
 
 /* everything that happens between two rendered blocks */
+/* Pattern launch uses the same overshoot handling as SONG, but copies into
+ * the editable working tracks. All four restart together at track 1's end.
+ * Audio ISR only: no flash access, allocations or project/sound reload here. */
+static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
+{
+    track_t *clock = &trk[0];
+    uint32_t length, k, slot = chain.live_pending;
+    if (!slot || !n || !song.playing || chain.running || chain.armed ||
+        clock->seq_pos >= 0x7FFFFFFFu || clock->seq_idx + 1u != seq_loop_len(clock)) return;
+    length = step_samples(clock, div_samples((uint32_t)clock->p[P_SDIV]), clock->seq_idx);
+    if (clock->seq_pos + n < length) return;
+    for (k = 0; k < NTRK; k++)
+        if (chain.live_engine[k] != trk[k].eng_req) {
+            chain.live_pending = 0;
+            chain.live_notice = 5;      /* engine changed after queuing: refuse unsafe automation */
+            return;
+        }
+    chain.carry = clock->seq_pos + n - length; /* SONG is idle; reuse its boundary overshoot */
+    motion_fx_close();
+    motion_end();
+    song.rec = 0;                       /* a queued launch must not record into the new pattern */
+    step_record_mask = 0;
+    for (k = 0; k < NTRK; k++) {
+        track_t *t = &trk[k];
+        seq_extend_end[k] = seq_extend_target[k] = 0;
+        seq_release(t);                 /* releases old tied notes, including MIDI note-offs */
+        memcpy(t->step, chain.source[0].step[k], sizeof t->step);
+        memcpy(&t->p[P_SLEN], chain.source[0].timing[k], sizeof chain.source[0].timing[k]);
+        t->p[P_SQNT] = chain.source[0].qnt[k];
+        t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
+        t->seq_pos = 0x7FFFFFFFu;
+        t->rh_n = t->rskip_n = t->rat_left = 0;
+        t->nd_late = t->nd_early = ND_NONE;
+        t->nd_fired = 0;
+    }
+    motion = chain.source[0].motion;
+    motion_begin();
+    chain.live_applied = 1;
+    chain.live_notice = (uint8_t)slot;
+    chain.live_pending = 0;
+}
+
 static void events_block(uint32_t n)
 {
     uint32_t i, pr, seq_n = n;
@@ -1216,7 +1287,7 @@ static void events_block(uint32_t n)
             midi_clock_transport(0xFAu, fm1_ms);
         else if (cin_left)
             ;                                       /* counting in already (the UI's PLAY stops it: seq_counting) */
-        else if (cin_bars && song.rec && !song.playing && !chain.armed)
+        else if (cin_bars && (song.rec & ~step_record_mask) && !song.playing && !chain.armed)
             cin_begin();                            /* recording from stop: the count-in first */
         else
             seq_start();
@@ -1275,6 +1346,7 @@ static void events_block(uint32_t n)
         t->aholdp = t->p[P_AHOLD];
     }
     keyboard_block();
+    motion_fx_sync();
     while (mi_r != mi_w) {                            /* USB-MIDI (and TRS) in */
         uint32_t at = mi_r % MQ, pkt = midi_in_q[at], status = (pkt >> 8) & 0xFFu;
         uint32_t st = status & 0xF0u, ch = status & 0x0Fu;
@@ -1304,9 +1376,11 @@ static void events_block(uint32_t n)
     }
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
+    project_pattern_tick(seq_n);
     chain_tick(seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);
+    chain.live_applied = 0;
     if (cin_flush)
         cin_record();
     if (song.playing)

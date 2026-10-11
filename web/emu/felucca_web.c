@@ -478,6 +478,30 @@ EXPORT void web_test_heavy(void)
 }
 
 EXPORT uint32_t web_test_user_preset(uint32_t i) { return (uint32_t)up_used(i); }
+EXPORT uint32_t web_test_project_used(uint32_t i) { return i < 4u && project_used(i); }
+EXPORT uint32_t web_test_project_ram_mask(void) { return project_ram_mask(); }
+EXPORT uint32_t web_test_step_record_mask(void) { return step_record_mask; }
+EXPORT uint32_t web_test_cursor(void) { return ui.cursor; }
+EXPORT uint32_t web_test_step_note(uint32_t i, uint32_t k) { return i < NSTEP && k < TSEL->step[i].n ? TSEL->step[i].note[k] : 255u; }
+EXPORT uint32_t web_test_step_count(uint32_t i) { return i < NSTEP ? TSEL->step[i].n : 0; }
+EXPORT uint32_t web_test_seq_idx(void) { return TSEL->seq_idx; }
+EXPORT uint32_t web_test_fx_events(void)
+{
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < motion.count; i++) n += MOTION_IS_FX(&motion.event[i]);
+    return n;
+}
+EXPORT uint32_t web_test_fx_replay(void) { return perf_motion[0] | perf_motion[1] | perf_motion[2] | perf_motion[3]; }
+EXPORT uint32_t web_test_fx_live(void) { return perf_held | perf_latched; }
+EXPORT uint32_t web_test_fx_edge(uint32_t on)
+{
+    for (uint32_t i = 0; i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        if (MOTION_IS_FX(e) && (e->place >> 6) == song.sel && !(e->param & MOTION_LOCK) == !!on)
+            return (e->place & 63u) << 8 | (uint8_t)e->value;
+    }
+    return 0xFFFFFFFFu;
+}
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }

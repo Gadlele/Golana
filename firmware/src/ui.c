@@ -7,6 +7,8 @@
 static int project_save(uint32_t slot);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
+static void project_init_runtime(void);
+static uint32_t project_pattern_queue(uint32_t slot);
 static int project_used(uint32_t slot);
 static uint32_t chain_prepare(void);
 static int up_used(uint32_t k);              /* user presets: upreset.c */
@@ -200,7 +202,7 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER };   /* ui.confirm: TOOLS' clears;
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_INIT_PROJECT };   /* ui.confirm: TOOLS' clears;
                                    * SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE */
 
@@ -433,6 +435,7 @@ static void ui_message(const char *s) { ui_say(s, ""); }
 #define MSG_NO_SAMPLE MSG_NOFILE "NO SAMPLE"
 
 static int chain_busy(void) { return chain.running || chain.armed; }
+static uint32_t project_ram_mask(void);          /* A-D changed in RAM, not yet committed to flash */
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */
 static int transport_busy(void)
@@ -801,6 +804,7 @@ static void pat_from_set(uint32_t slot)             /* every track's pattern is 
 static void load_motion_hold(track_t *t, uint32_t what)
 {
     if (what & UNDO_PAT) {
+        seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
         motion_reset(t);
         load_mo = 0;
         return;
@@ -960,6 +964,7 @@ static void undo_swap(void)
         return;
     }
     undo.motion_backup = current_motion;
+    if (undo.what == UNDO_MOT) motion_fx_refresh(t);
     fm1_irq_off();                                /* the audio ISR must not see half a sound */
     if (undo.what & UNDO_SOUND) {
         uint8_t e = t->eng_req, pr = t->preset, u = t->user;
@@ -978,6 +983,7 @@ static void undo_swap(void)
             }
     }
     if (undo.what & UNDO_PAT) {
+        seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
         uint32_t ps = pat_sig[trk_index(t)];
         uint8_t pn = pat_last[trk_index(t)];
         pat_sig[trk_index(t)] = undo.pat;
@@ -1591,6 +1597,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return 0;
     if (pg->graph == GR_EVENTS) return 16u;     /* AUTOMATION: no knob is an action; OCT+ by the row (ev_oct) */
     if (pg->graph == GR_TOOLS) return 15u;
+    if (pg->graph == GR_SLOTS) return 14u;
     if (pg->graph == GR_SONG)
         return 1u;                               /* PLAY / STOP (also the PLAY button) */
     if (pg->graph == GR_PATS)
@@ -1619,6 +1626,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
     uint32_t id = cur_page()->id[c & 3u];
     if (cur_page()->graph == GR_EVENTS) return ev_act_name();
+    if (cur_page()->graph == GR_SLOTS && c == 1u) return "INIT";
     if (cur_page()->graph == GR_TOOLS) {
         static const char *const actions[] = {"CLEAR", "INIT", "DELETE", "CLEAR"};
         return actions[c & 3u];

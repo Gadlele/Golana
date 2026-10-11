@@ -166,7 +166,7 @@ OUT=build/host
 mkdir -p "$OUT"
 CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 fail=0
-run() { echo "== $1"; shift; "$@" || fail=1; }
+run() { label=$1; echo "== $label"; shift; "$@" || { rc=$?; echo "FAILED (exit $rc): $label"; fail=1; }; }
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
@@ -232,6 +232,12 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "TRACKS: 4-track pattern, live recording (lengths, swing), voice budget, engine switch, cost" env TRACKS=build/tracks_demo "$OUT/hostsim" 0 0 1 "$OUT/tracks.wav"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/project_test" tests/project_test.c -lm
     run "project formats (FUN1..FUN5 -> FUN6, the grid and song chain; DIGITAL tracks -> FM6, SAMPLE PERC -> DRUM)" "$OUT/project_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx_motion_test" tests/fx_motion_test.c -lm
+    run "FX-special automation: fine-timed edges, latch, lifecycle, capacity and saved parts" "$OUT/fx_motion_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx_edit_test" tests/fx_edit_test.c -lm
+    run "FX edge editing: independent step/phase, live chase, undo, loop and ordering" "$OUT/fx_edit_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/duplicate_test" tests/duplicate_test.c -lm
+    run "DUP x2: step/motion copies, shared capacity, undo, live boundary and part launch" "$OUT/duplicate_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/motion_test" tests/motion_test.c -lm
     run "motion, whole-step chance, FUN7 migration, song restore, ARP repeat and the 1.2 ARP modes" "$OUT/motion_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ratchet_test" tests/ratchet_test.c -lm
@@ -264,6 +270,10 @@ if [ -f build/gen/felucca_tables.h ]; then
     fi
     $CC -O1 -w -Ibuild/gen -o "$OUT/settings_test" tests/settings_test.c
     run "settings: PER1..PER4 migration, palette ids and preference preservation" "$OUT/settings_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/live_pattern_test" tests/live_pattern_test.c -lm
+    run "live project patterns: boundary, motion/locks, replacement, stop, engine guard and LOAD UI" "$OUT/live_pattern_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/step_play_test" tests/step_play_test.c -lm
+    run "step recording during playback: cursor, chords, live mode, MIDI, automation and RAM save" "$OUT/step_play_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test" tests/ui_test.c -lm
     run "UI: sounds keep steps, undo, recording, MIDI overflow, pending saves, panel recovery, drum grid, song chain, GREY gray, MONO neutral" "$OUT/ui_test"
     FV=$(sed -n 's/^#define FELUCCA_VERSION "\([^"]*\)".*/\1/p' firmware/src/felucca.c)   # (the splash, ABOUT: the real version)
@@ -399,7 +409,7 @@ else
     run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
     $SCC -DOWN_PKG=1 -o "$A/ota_test" tests/ota_test.c
     run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/felucca.fwsc
-    for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test; do
+    for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test duplicate_test fx_edit_test; do
         $SCC -o "$A/$t" tests/$t.c -lm
         run "ASan/UBSan: $t" "$A/$t"
     done
