@@ -123,7 +123,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
   to switch to LIVE REC; a normal REC tap disarms.
 - **Record FX-special performances:** LIVE REC now captures all fourteen white-key FX specials, including
   REV THROW and ECHO THROW, with their press/release timing. Short taps, FX LATCH and holds across steps or
-  loop boundaries replay with the pattern and are saved with A–D.
+  loop boundaries replay with the pattern and are saved with A–D. FX events share the existing 128-record
+  pool with motion and locks; older firmware refuses projects containing these new FX events.
 - **Global FX track:** hold HOME, open CONTROL and choose **FX TRACK T1–T4** (default T1). That track records
   and replays global FX using its LEN/DIV, even while another sound track is selected. The setting saves
   with the project; the effects process the master mix.
@@ -135,13 +136,13 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
   SAVE held undoes/redoes the operation.
 - **Edit FX start and duration:** SEQ > AUTOMATION lists FX ON/OFF as independent events. KNOB 1 / PRESETS
   selects one, **KNOB 2** moves its step and **KNOB 4** adjusts its fine position (0–255/256), leaving the other
-  event in place. Changes work during pattern playback; SAVE held undoes/redoes each gesture.
+  event in place. Changes work during pattern playback; SAVE held undoes/redoes each gesture. End an
+  unfinished FX recording on that track before editing.
 - **Delete one FX performance:** EDIT on an FX OFF removes it and the nearest preceding ON of that effect;
   EDIT on ON removes it and the next OFF. Pairing follows fine timing across the loop boundary on the same
-  track. Other takes stay in place; SAVE held restores both events in one undo.
-
-Details: [live parts and recording](docs/LIVE_PATTERNS.md),
-[FX-special automation](docs/FX_SPECIAL_AUTOMATION.md), [DUP x2](docs/SEQUENCE_DUPLICATE.md).
+  track. Pairing follows the current timeline: ON 3, ON 5, OFF 7 pairs OFF 7 with ON 5, leaving ON 3.
+  Without an opposite edge in the active loop, only the selected row is deleted; rows beyond LEN are
+  also deleted alone. SAVE held restores both events in one undo.
 
 ## New in 1.5.1
 
