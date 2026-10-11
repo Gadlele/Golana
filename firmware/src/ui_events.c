@@ -33,7 +33,7 @@
  *          event holds its value until the next one, a lock sounds on its step only); on PLAY: CLEAR (the dialog)
  *   EDIT   deletes the record, puts a CHANCE / RATCH / NUDGE / VEL back to 100 % / x1 / 0 / 96;  OCT- goes HOME (as
  *          on the other action pages)
- *          FX: deletes the complete effect lane; KNOB 3 and OCT+ keep effect identity and edge kind fixed
+ *          FX: deletes ON + next OFF, or OFF + previous ON; KNOB 3 and OCT+ keep identity and kind fixed
  * Every edit is one undo (SAVE held: ui.c motion_undo_take, step_undo_take; a knob turned on is one; PLAY and QUANTIZE
  * are settings, as on their pages before). Not while a song plays (STOP TO EDIT). The 128 records are shared by the four
  * tracks: AUTOMATION FULL when they are used */
@@ -526,8 +526,12 @@ static void ev_delete(void)
         return;
     if (k == EVK_REC) {
         e = &motion.event[c & 0xFFu];
+        if (MOTION_IS_FX(e) && motion_fx_delete_ok(t, c & 0xFFu)) {
+            ui_message("END FX REC FIRST");
+            return;
+        }
         motion_undo_take(t, 0);
-        if (MOTION_IS_FX(e)) motion_fx_delete(t, MOTION_ID(e) - MOTION_FX_FIRST);
+        if (MOTION_IS_FX(e)) motion_fx_delete(t, c & 0xFFu);
         else motion_delete_event(t, e->place & 63u, MOTION_ID(e));
     } else {
         step_undo_take(t, 0);

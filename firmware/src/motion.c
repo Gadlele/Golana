@@ -551,13 +551,21 @@ static void motion_fx_position(track_t *t, uint32_t *step, uint32_t *phase)
  * same effect are rejected (including ON/OFF: no zero-duration pair). A live
  * capture on this track must end first, so its reserved OFF and undo snapshot
  * cannot change underneath the edit. No records or metadata are added. */
-static int motion_fx_edit_ok(const track_t *t, uint32_t i, uint32_t step, uint32_t phase)
+static int motion_fx_delete_ok(const track_t *t, uint32_t i)
 {
     uint32_t k = trk_index(t);
     if (i >= motion.count || !MOTION_IS_FX(&motion.event[i]) ||
-        (motion.event[i].place >> 6) != k || step >= NSTEP || phase > 255u) return 1;
+        (motion.event[i].place >> 6) != k) return 1;
     for (uint32_t e = 0; e < PF_NFX; e++)
         if (motion_fx_owner[e] == k + 1u) return 2;
+    return 0;
+}
+static int motion_fx_edit_ok(const track_t *t, uint32_t i, uint32_t step, uint32_t phase)
+{
+    int err = motion_fx_delete_ok(t, i);
+    if (err) return err;
+    if (step >= NSTEP || phase > 255u) return 1;
+    uint32_t k = trk_index(t);
     uint32_t place = k << 6 | step, id = MOTION_ID(&motion.event[i]);
     for (uint32_t j = 0; j < motion.count; j++)
         if (j != i && motion.event[j].place == place && MOTION_ID(&motion.event[j]) == id &&
@@ -749,22 +757,34 @@ static __attribute__((noinline)) void motion_fx_tick(track_t *t, const motion_st
     if (to > 255u) to = 255u;
     if (motion_fx_next[k] <= to) motion_fx_run(t, m, motion_fx_next[k], to);
 }
-/* Delete a complete effect lane, keeping press/release pairs intact. */
-static void motion_fx_delete(track_t *t, uint32_t fx)
+/* Temporal pairing, not take identity: ON takes the next OFF, OFF the previous
+ * ON, in the active loop and at 1/256-step precision. Dormant rows beyond LEN
+ * have no playback neighbour and are deleted alone. Preserve all other rows. */
+static void motion_fx_delete(track_t *t, uint32_t selected)
 {
-    uint32_t f = motion_guard(), k = trk_index(t), n = 0;
+    uint32_t f = motion_guard(), n = 0;
+    if (motion_fx_delete_ok(t, selected)) { motion_unguard(f); return; }
+    const motion_event_t e = motion.event[selected];
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), period = len << 8;
+    uint32_t at = (e.place & 63u) << 8 | (uint8_t)e.value;
+    uint32_t partner = MOTION_MAX, best = period;
+    if ((e.place & 63u) < len) {
+        for (uint32_t i = 0; i < motion.count; i++) {
+            const motion_event_t *v = &motion.event[i];
+            if ((v->place >> 6) != (e.place >> 6) || (v->place & 63u) >= len ||
+                MOTION_ID(v) != MOTION_ID(&e) || !((v->param ^ e.param) & MOTION_LOCK)) continue;
+            uint32_t other = (v->place & 63u) << 8 | (uint8_t)v->value;
+            uint32_t distance = e.param & MOTION_LOCK ?
+                (at + period - other) % period : (other + period - at) % period;
+            if (distance && distance < best) { best = distance; partner = i; }
+        }
+    }
     for (uint32_t i = 0; i < motion.count; i++) {
-        const motion_event_t *e = &motion.event[i];
-        if ((e->place >> 6) == k && MOTION_ID(e) == MOTION_FX_FIRST + fx) continue;
-        motion.event[n++] = *e;
+        if (i != selected && i != partner) motion.event[n++] = motion.event[i];
     }
     memset(motion.event + n, 0, (MOTION_MAX - n) * sizeof motion.event[0]);
     motion.count = (uint8_t)n;
     motion_fx_meta(&motion);
-    motion_fx_reset(t);
-    if (motion_fx_owner[fx] == k + 1u) {
-        motion_fx_owner[fx] = 0;
-        motion_fx_recording &= (uint16_t)~PF_BIT(fx);
-    }
+    motion_fx_refresh(t);
     motion_unguard(f);
 }

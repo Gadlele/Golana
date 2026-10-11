@@ -182,7 +182,7 @@ static int ui_and_lanes(void)
     bad += check("FX: fine-time rows cannot become parameter locks", motion.count == count && motion_valid(&motion));
     uint32_t c = ev_cur(rows, 0); uint32_t fx = MOTION_ID(&motion.event[c & 0xFFu]) - MOTION_FX_FIRST;
     ev_delete();
-    bad += check("FX: EDIT removes a complete effect lane, leaving other pairs", motion.count == count - 2 && motion_valid(&motion));
+    bad += check("FX: EDIT removes the selected pair, leaving other effects", motion.count == count - 2 && motion_valid(&motion));
     motion_fx_put(&trk[1], 0, PF_FRZ, 0, 1); motion_fx_put(&trk[1], 1, PF_FRZ, 0, 0);
     motion_clear(TSEL);
     bad += check("FX: track clear keeps other track's FX", motion.count == 2 && motion.rsv[0] == 2);

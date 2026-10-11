@@ -48,6 +48,23 @@ FIRST). Active SONG retains STOP TO EDIT. Other tracks and parameter events are
 untouched. Edges are independent, so moving across other takes changes their
 combined timeline; the normal redundant-OFF cleanup still applies on save/load.
 
+## Deleting one performance
+
+EDIT on OFF removes that row and the nearest ON before it; EDIT on ON removes
+that row and the next OFF after it. Only the same effect on the same track is
+considered. Fine position determines the order within a step, and the search
+wraps at the track's loop boundary. Without an opposite edge in the active loop,
+only the selected row is removed. Rows beyond LEN are dormant and deleted alone.
+SAVE held undoes/redoes the two deletions together. Playback is refreshed at
+the current playhead, preserving manual held/latched effects and transport.
+An unfinished FX take on this track must end first (END FX REC FIRST).
+
+This is chronological pairing, not a stored identity for the original take.
+For ON at step 3, ON at step 5 and OFF at step 7, deleting OFF at step 7 also
+deletes ON at step 5; ON at step 3 remains and can keep the effect active.
+Moving an edge across other performances therefore changes which edge EDIT
+chooses. All other events remain in place.
+
 ## Saving, clearing and limits
 
 - SAVE during playback captures the duration of any recorded hold **up to the
@@ -61,8 +78,8 @@ combined timeline; the normal redundant-OFF cleanup still applies on save/load.
   another step; KNOB4 edits its ON AT/OFF AT phase (0-255/256). The other edge
   stays put, so these edits change the start or duration independently. Effect
   identity and ON/OFF kind are fixed. SAVE held undoes/redoes each knob gesture.
-  EDIT deletes that effect's complete event lane on the selected track. UNDO
-  restores the lane. CLEAR removes all automation on that track; PLAY OFF
+  EDIT deletes the selected chronological pair as described above. UNDO
+  restores both edges. CLEAR removes all automation on that track; PLAY OFF
   bypasses it. Other tracks' events stay intact.
 - FX edges share the existing **128-record pool** with knob motion and parameter
   locks. A normal tap uses two records. A new captured ON reserves capacity for
