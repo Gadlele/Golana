@@ -65,3 +65,6 @@ alongside this launcher because both reuse the existing pattern cache.
 queued launches, independent step entry, RAM snapshots and commits after STOP.
 The emulator accepts Web MIDI channel messages, but not MIDI clock/Start/Stop;
 external-clock timing and listening still need checking on a real FM-1.
+
+See [FX_SPECIAL_AUTOMATION.md](FX_SPECIAL_AUTOMATION.md) for FX recording and
+project controls.

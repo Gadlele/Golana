@@ -359,7 +359,11 @@ static int ed_flash_stop(void)
 static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds, uint32_t full)
 {
     track_t *t = &trk[k];
-    uint32_t i, n = motion_count(t), cap = full ? MOTION_MAX : 64u, j;
+    uint32_t i, n = 0, cap = full ? MOTION_MAX : 64u, j;
+    /* Legacy web motion protocol names sound parameters only. Project backup
+     * still carries every FX edge; the on-device list shows them separately. */
+    for (i = 0; i < motion.count; i++)
+        n += (motion.event[i].place >> 6) == k && !MOTION_IS_FX(&motion.event[i]);
     n = n < cap ? n : cap;
     ed_b(k); ed_b(rc); ed_b(motion_enabled(t));
     if (full) {
@@ -369,12 +373,12 @@ static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds, uint32_t fu
     }
     for (i = j = 0; i < motion.count && j < n; i++) {
         const motion_event_t *e = &motion.event[i];
-        if ((e->place >> 6) != k) continue;
+        if ((e->place >> 6) != k || MOTION_IS_FX(e)) continue;
         ed_b(e->place & 63u); ed_b(MOTION_ID(e)); ed_v(e->value);
         j++;
     }
     for (i = j = 0; kinds && i < motion.count && j < n; i++)
-        if ((motion.event[i].place >> 6) == k) {
+        if ((motion.event[i].place >> 6) == k && !MOTION_IS_FX(&motion.event[i])) {
             ed_b((motion.event[i].param & MOTION_LOCK) != 0u);
             j++;
         }

@@ -119,6 +119,25 @@ check("FX held: its button and the effects' keys breathe, none lit; let go: noth
         Math.abs(got[3] - lo) <= 0.06);
 }
 
+// ---- master FX edges through the actual REC + FX/key gestures
+const fx = await device(null);
+fx.render(1000);
+fx.tap(B.REC);
+fx.ex.web_buttons(1 << B.FX); fx.render(700);
+fx.ex.web_keys(1 << 7); fx.render(25); // C4: default LPF, short press
+fx.ex.web_keys(0); fx.render(20);
+check("FX special: REC + held FX/key records short press and release", fx.ex.web_test_fx_events() === 2 &&
+      fx.ex.web_test_fx_live() === 0 && fx.ex.web_playing() === 1);
+fx.ex.web_buttons(0); fx.render(100);
+fx.tap(B.REC); // disarm
+fx.tap(B.PLAY); // stop
+check("FX special: STOP releases sequencer FX and retains both edges", fx.ex.web_test_fx_replay() === 0 && fx.ex.web_test_fx_events() === 2);
+fx.tap(B.PLAY);
+let fxHeard = false;
+for (let i = 0; i < 400; i++) { fx.render(5); fxHeard ||= fx.ex.web_test_fx_replay() !== 0; }
+check("FX special: next pass replays without FX button or live key", fxHeard && fx.ex.web_test_fx_live() === 0);
+fx.tap(B.PLAY);
+
 // ---- a user preset saved from the panel, kept across a fresh instance
 const w0 = a.ex.web_flash_writes_count();
 a.tap(B.SAVE);

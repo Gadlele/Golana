@@ -687,9 +687,11 @@ static __attribute__((noinline)) void perf_key_remap(void)
         kb_fx[k] = (uint8_t)(e + 1u);
         if (o < PF_N && ((perf_latched >> o) & 1u)) {
             perf_latched &= ~PF_BIT(o);
+            motion_fx_capture(o, 0);
             if (e < PF_N) {
                 perf_latched |= PF_BIT(e);
                 perf_ord[e] = ++perf_seq;
+                motion_fx_capture(e, 1);
             }
         }
     }
@@ -811,6 +813,7 @@ static void keyboard_block(void)
 static void seq_start(void)
 {
     uint32_t i;
+    motion_fx_close();
     motion_begin();
     chain_start();
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
@@ -846,6 +849,7 @@ static void seq_release(track_t *t)
 static void seq_stop(void)
 {
     uint32_t i;
+    motion_fx_close();
     song.playing = 0;
     chain.live_pending = chain.live_applied = 0;
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
@@ -1102,6 +1106,8 @@ static void seq_tick(track_t *t, uint32_t n)
             seq_nd_due(t, period, len, cur_len, n);
         if (t->seq_pos < cur_len && t->seq_pos != 0x7FFFFFFFu + n)
             break;
+        if (t->seq_pos < 0x7FFFFFFFu)
+            motion_fx_tick(t, chain_motion(t), cur_len); /* include the old step's tail before wrapping */
         t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? ((chain.running | chain.live_applied) ? chain.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
         rec_hold(t, t->seq_idx, len);
@@ -1109,7 +1115,9 @@ static void seq_tick(track_t *t, uint32_t n)
             seq_play(t, t->seq_idx, period);        /* QUANTIZE ON: every step on its start, as before 1.2 */
         else
             seq_nd_start(t, period, len);
+        motion_fx_step(t, chain_motion(t));
     }
+    motion_fx_tick(t, chain_motion(t), step_samples(t, period, t->seq_idx));
     if (t->rat_left)
         seq_ratchet(t, period);
 }
@@ -1219,6 +1227,7 @@ static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
             return;
         }
     chain.carry = clock->seq_pos + n - length; /* SONG is idle; reuse its boundary overshoot */
+    motion_fx_close();
     motion_end();
     song.rec = 0;                       /* a queued launch must not record into the new pattern */
     step_record_mask = 0;
@@ -1317,6 +1326,7 @@ static void events_block(uint32_t n)
         t->aholdp = t->p[P_AHOLD];
     }
     keyboard_block();
+    motion_fx_sync();
     while (mi_r != mi_w) {                            /* USB-MIDI (and TRS) in */
         uint32_t at = mi_r % MQ, pkt = midi_in_q[at], status = (pkt >> 8) & 0xFFu;
         uint32_t st = status & 0xF0u, ch = status & 0x0Fu;

@@ -30,6 +30,7 @@ static const uint8_t ED_MENU[][2] = {
     {MI_TUNE, 22},                                     /* 1.2: the project's G_TUNE (was GLO > GLOBAL), AUDIO */
     {MI_HOME, 23},                                     /* 1.3 (Discussions #112, #134): HOME SCOPE / TRACKS, DISPLAY */
     {MI_HELP, 24},                                     /* 1.5 (Discussion #156): HELP OFF / ON, SYSTEM */
+    {MI_FXTRACK, 25},                                 /* project global FX owner; stable editor id */
 };
 #define ED_MENU_N NELEM(ED_MENU)
 

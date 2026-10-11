@@ -67,6 +67,11 @@ static int ev_id_ok(const track_t *t, uint32_t id)
  * would say two things (ENV ATK, ENV FLT: ENV DEST's, LFO FLT: LFO DEST's) */
 static void ev_name(const track_t *t, uint32_t id, char *b)
 {
+    static const char *const fx[] = {"RPT 1/8", "RPT 1/16", "RPT 1/32", "REVERSE", "LPF", "HPF",
+        "TAPE STOP", "FREEZE", "OCT UP", "OCT DN", "FLANGER", "PHASER", "REV THROW", "ECHO THROW"};
+    if (id >= MOTION_FX_FIRST && id - MOTION_FX_FIRST < PF_NFX) {
+        str_cpy(b, fx[id - MOTION_FX_FIRST], 12); return;
+    }
     const char *pre = id >= P_ATK && id <= P_ED_SHP ? "ENV " : id >= P_LRATE && id <= P_LD_AMP ? "LFO " : "";
     if (ev_sid(id)) {
         str_cpy(b, id == EV_CHANCE ? "CHANCE" : id == EV_RATCH ? "RATCH" : id == EV_VEL ? "VEL" : "NUDGE", 12);
@@ -259,6 +264,7 @@ static const char *ev_act_name(void)
         return ui.ev_id != EV_VEL ? "ADD" : ui.ev_vel ? "HIDE" : "SHOW";
     if (k != EVK_REC)
         return "--";
+    if (MOTION_IS_FX(&motion.event[c & 0xFFu])) return "--";
     return (motion.event[c & 0xFFu].param & MOTION_LOCK) ? "AUTO" : "LOCK";   /* what OCT+ turns it into */
 }
 static int ev_act_ready(void)
@@ -271,7 +277,7 @@ static int ev_act_ready(void)
         return motion_count(TSEL) != 0u;
     if (k == EVK_ADD)
         return ev_sid(ui.ev_id) || (motion.count < MOTION_MAX && ev_id_ok(TSEL, ui.ev_id));
-    return k == EVK_REC;
+    return k == EVK_REC && !MOTION_IS_FX(&motion.event[c & 0xFFu]);
 }
 
 static int ev_busy(void)
@@ -367,6 +373,7 @@ static void ev_knob(uint32_t slot, int32_t s)
     }
     i = c & 0xFFu;
     e = &motion.event[i];
+    if (MOTION_IS_FX(e)) return; /* fine-timed edge pairs are read-only; EDIT deletes this effect lane */
     step = e->place & 63u;
     id = MOTION_ID(e);
     if (slot == 1u) {                                   /* the next step where its parameter is free */
@@ -469,6 +476,7 @@ static void ev_oct(void)
     }
     if (k == EVK_REC) {
         const motion_event_t e = motion.event[c & 0xFFu];
+        if (MOTION_IS_FX(&e)) return;
         uint32_t lock = !(e.param & MOTION_LOCK);
         motion_undo_take(t, 0);
         (void)motion_put(t, e.place & 63u, MOTION_ID(&e), e.value, lock ? MOTION_LOCK : 0u);
@@ -499,7 +507,8 @@ static void ev_delete(void)
     if (k == EVK_REC) {
         e = &motion.event[c & 0xFFu];
         motion_undo_take(t, 0);
-        motion_delete_event(t, e->place & 63u, MOTION_ID(e));
+        if (MOTION_IS_FX(e)) motion_fx_delete(t, MOTION_ID(e) - MOTION_FX_FIRST);
+        else motion_delete_event(t, e->place & 63u, MOTION_ID(e));
     } else {
         step_undo_take(t, 0);
         ev_sput(&t->step[c & 0xFFu], k, ev_sdefv(k));

@@ -1,0 +1,83 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+# FX-special automation
+
+The FX layer's fourteen special effects can be recorded with their press and
+release times. Hardware listening and timing checks are still pending.
+
+## Playing and recording
+
+1. Hold HOME, open CONTROL and choose FX TRACK (T1–T4, default T1). Select that track.
+2. Tap REC to arm that track for **LIVE REC** and start playback. STEP REC does not capture FX.
+   You may then select another sound track; FX recording still follows FX TRACK.
+3. Hold FX (or lock its layer open) and play the white-key special effects.
+4. Release a key to record its end. With FX LATCH ON, the second press records
+   the end; releasing the key leaves the latched effect running.
+5. Disarm REC after the take. The events repeat with that track's loop and play
+   without holding FX. SAVE > PROJECT stores them with parts A–D as usual.
+
+The FX still process the **master mix**. Their owning track supplies the loop
+length, step division and timing; it does not isolate their audio to that track.
+All fourteen effects are supported, including REPEAT, REVERSE, filters, TAPE
+STOP, FREEZE, octave shifts, FLANGER, PHASER and REV/ECHO THROW. Reassigning the
+key map later does not change the recorded effect identities. Black-key mutes,
+solo, FX knob macros and incoming MIDI notes remain live controls.
+
+The two edges of a short tap are separate records, even within one step. Timing
+is stored in 1/256 of each swung step and rendered at the existing 32-sample
+control-block resolution. It follows tempo changes and the external clock.
+REPEAT and REVERSE retain their usual activation on the next 1/16 boundary.
+Step CHANCE and note NUDGE do not suppress or move FX performance events.
+Holds can cross steps and loop boundaries. Different effects stack as before;
+the last activated buffer effect has priority. Live keys remain independent:
+a recorded release cannot release a key you are holding manually.
+
+## Saving, clearing and limits
+
+- SAVE during playback captures the duration of any recorded hold **up to the
+  save moment**, while the live recording continues. The saved part initially
+  resides in RAM and is committed after STOP, by the live-save mechanism.
+- STOP, external-clock timeout and part changes release sequencer-owned FX.
+  Live held/latched controls retain their existing behavior. Captured holds are
+  closed before STOP or a live part switch so they do not become orphan events.
+- SEQ > AUTOMATION lists each edge as FX, the effect name and ON/OFF. The cards
+  also show its phase within the step. Effect identity and ON/OFF kind are fixed.
+  EDIT deletes that effect's complete event lane on the selected track. UNDO
+  restores the lane. CLEAR removes all automation on that track; PLAY OFF
+  bypasses it. Other tracks' events stay intact.
+- FX edges share the existing **128-record pool** with knob motion and parameter
+  locks. A normal tap uses two records. A new captured ON reserves capacity for
+  its OFF; when there is insufficient room, AUTOMATION FULL appears and the
+  effect still works live. Identical overdubs reuse an existing edge; different
+  timings add events, so disarm after a take or clear an old effect lane.
+
+The project payload and event pool retain their sizes. New FX records use a
+marked extension of FUN10; existing projects still load. Older firmware refuses
+a project containing these new FX events, so export a backup before downgrading.
+The existing Web MIDI editor's parameter-motion list excludes FX records; the
+device/emulator list and project backup preserve them.
+
+## Validation
+
+`tests/fx_motion_test.c` exercises the real panel, sequencer, project, live part
+and TRS MIDI-clock paths, plus latch, lifecycle, full-pool reservations and
+malformed data. `web/emu/emu_test.mjs` checks the REC + FX/key gesture and replay
+in WebAssembly. `tests/run_tests.sh` runs the new test alongside the existing
+full suite and target image, RAM and ISR-budget checks. Hardware listening and
+timing checks remain pending; hardware validation is not claimed.
+
+## Project controls
+
+FX TRACK is stored in bits 4–5 of motion.rsv[0], preserving FUN10's 3840-byte payload. Metadata
+refresh and clearing automation preserve this setting. Older zero-filled stores default to T1; no
+recordings are migrated. Changing owner closes pending captures and releases old replay. Parameter
+automation remains per sound track. SONG uses the working project's designated FX track; live part
+launch adopts the new part's setting with its motion data at the boundary.
+
+SAVE > PROJECT > INIT (KNOB2, OCT+, then confirmation OCT+) restores the boot project without
+rebooting. OCT- cancels. It clears the working notes, automation, song order, recording arms and
+performance state and restores default project values and sounds, including FX TRACK T1. Saved
+slots A–D, pending RAM commits, USER presets, FM6 bank, MIDI-learn map and device preferences stay
+intact. The fresh working project follows the usual autosave policy; no named slot is overwritten.
+
+Redundant consecutive releases are compacted after capture and when saving/loading. All ON events
+remain because they update buffer-effect priority; the first OFF survives for cross-loop holds.

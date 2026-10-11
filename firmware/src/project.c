@@ -335,7 +335,7 @@ static void proj_fm4(project_t *q)
         return;
     for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
         const motion_event_t *e = &q->motion.event[i];
-        if (((hit >> (e->place >> 6)) & 1u) && (MOTION_ID(e) >= P_E0 || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
+        if (!MOTION_IS_FX(e) && ((hit >> (e->place >> 6)) & 1u) && (MOTION_ID(e) >= P_E0 || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
             continue;
         q->motion.event[n++] = *e;
     }
@@ -367,7 +367,7 @@ static void proj_perc(project_t *q)
         return;
     for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
         const motion_event_t *e = &q->motion.event[i];
-        if (((hit >> (e->place >> 6)) & 1u) && MOTION_ID(e) >= P_E0)
+        if (!MOTION_IS_FX(e) && ((hit >> (e->place >> 6)) & 1u) && MOTION_ID(e) >= P_E0)
             continue;
         q->motion.event[n++] = *e;
     }
@@ -627,6 +627,7 @@ static int proj_motion_ids(motion_store_t *m, uint32_t np)
     uint32_t i;
     for (i = 0; i < m->count && i < MOTION_MAX; i++) {
         uint32_t id = MOTION_ID(&m->event[i]);
+        if (MOTION_IS_FX(&m->event[i]) && np == P_COUNT && m->rsv[1] == 0xF1u) continue;
         if (id >= np) return 0;
         if (np < P_COUNT && id >= np - 8u)
             m->event[i].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | (id + P_COUNT - np));
@@ -859,6 +860,7 @@ static void project_capture(project_t *p)
         memcpy(p->t[i].step, trk[i].step, sizeof trk[i].step);
     }
     p->motion = motion;
+    motion_fx_snapshot(&p->motion, (1u << NTRK) - 1u);
     motion_unguard(f);
     for (i = 0; i < NTRK; i++) fm6_pack(fm6_patch[i], p->fm6[i]);
     memcpy(p->name, proj_name, str_len(proj_name));
@@ -1026,6 +1028,63 @@ static int project_rename(uint32_t slot, const char *name)
     return 0;
 }
 
+/* Initialize the working project; persistent slots, pending saves and device
+ * preferences are untouched. Engines switch through their usual release fade. */
+static void project_init_runtime(void)
+{
+    mom_back(0);
+    fm1_irq_off();
+    seq_stop();
+    transport_req = 0;
+    song.rec = step_record_mask = 0;
+    panic_req = (1u << NTRK) - 1u;
+    mi_r = mi_w;
+    /* Send panel note-offs using the old project routing before resetting it. */
+    for (uint32_t k = 0; k < 27u; k++) key_off(k, &trk[kb_trk[k] % NTRK]);
+    kb_prev = fm1_in.notes;
+    memset(kb_note, KB_SILENT, sizeof kb_note);
+    memset(kb_fx, 0, sizeof kb_fx);
+    perf_held = perf_latched = perf_solo = 0;
+    memset(perf_k, 0, sizeof perf_k);
+    memset(perf_motion, 0, sizeof perf_motion);
+    memset(drum_mute, 0, sizeof drum_mute);
+    memset(&motion, 0, sizeof motion);
+    memset(motion_fx_owner, 0, sizeof motion_fx_owner);
+    motion_fx_recording = 0;
+    motion_base_valid = 0;
+    chain_defaults(&chain_config);
+    for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
+    song.sel = 0;
+    fm1_irq_on();
+    ml_off();
+    undo_depth++;
+    fm6_init();
+    for (uint32_t k = 0; k < NTRK; k++) {
+        track_t *t = &trk[k];
+        fm1_irq_off();
+        memset(t->step, 0, sizeof t->step);
+        track_defaults(t);
+        fm1_irq_on();
+        set_engine_of(t, TRK_DEF[k][0]);
+        apply_preset_to(t, TRK_DEF[k][1]);
+        track_defaults_steps(t);
+        t->nheld = t->arp_phys = 0;
+        pat_sig[k] = steps_sig(t);
+        pat_last[k] = TRK_DEF[k][2];
+    }
+    undo_depth--;
+    memset(&undo, 0, sizeof undo);
+    memset(ui.mpc, 0, sizeof ui.mpc);
+    ui.entry_open = ui.cursor = ui.bank = ui.song_row = ui.hot_t = ui.ev_keep = 0;
+    song.octave = 0;
+    song.seq_mode = 0;
+    proj_name[0] = 0;
+    proj_cur = PROJ_NO_SLOT;
+    pat_from_set(0);
+    sync_reload = ui.force = 1;
+    ui_message("PROJECT INITIALIZED");
+}
+
 static int project_restore_runtime(const project_t *input)
 {
     project_t *p = &proj_scratch;
@@ -1045,6 +1104,7 @@ static int project_restore_runtime(const project_t *input)
     transport_req = 0;
     chain_config = p->chain;
     motion = p->motion;
+    motion_fx_compact_off(&motion, (1u << NTRK) - 1u);
     memset(motion_active, 0, sizeof motion_active);
     motion_base_valid = 0;
     ui.song_row = 0;
@@ -1184,6 +1244,7 @@ static uint32_t project_pattern_queue(uint32_t slot)
     chain.live_pending = 0;
     fm1_irq_on();
     chain.source[0].motion = p->motion;
+    motion_fx_compact_off(&chain.source[0].motion, (1u << NTRK) - 1u);
     for (k = 0; k < NTRK; k++) {
         chain.live_engine[k] = p->t[k].engine;
         memcpy(chain.source[0].step[k], p->t[k].step, sizeof p->t[k].step);
@@ -1223,13 +1284,14 @@ static uint32_t chain_prepare(void)
             project_t *p = &proj_scratch;
             if (!proj_import(p, &proj_slot[i], sizeof(project_store_t))) return 3u + i;
             chain.source[i].motion = p->motion;
+            motion_fx_compact_off(&chain.source[i].motion, (1u << NTRK) - 1u);
             /* A song keeps its current instruments. Engine-specific motion from
              * another instrument would change a kit/wave/algorithm unexpectedly. */
             {
                 motion_store_t *m = &chain.source[i].motion; uint32_t n = 0;
                 for (uint32_t e = 0; e < m->count; e++) {
                     const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
-                    if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req) continue;
+                    if (!MOTION_IS_FX(v) && MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req) continue;
                     m->event[n++] = *v;
                 }
                 m->count = (uint8_t)n;

@@ -733,6 +733,11 @@ static void draw_foot(void)
     const char *ename = e->name, *help;
     int32_t x;
     sound_name(t, pn);
+    if (!ui.home && pg->graph == GR_EVENTS) {
+        ename = "GLOBAL FX";
+        str_cpy(pn, "T1", sizeof pn);
+        pn[1] = (char)('1' + motion_fx_track());
+    }
     if (ui.home)
         str_cpy(ti, "HOME", sizeof ti);
     else                                               /* page title + number in its family: "ENV DEST 2/2" */
@@ -941,6 +946,14 @@ static void draw_columns(void)
         draw_column(0, "ROW", val, "", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)step + 1);
         draw_column(1, "STEP", val, "", k != EVK_ADD || step < (uint32_t)t->p[P_SLEN] ? VAL(1u) : T_DIM, -1, ICON_AUTO);
+        if (k == EVK_REC && MOTION_IS_FX(&motion.event[c & 0xFFu])) {
+            const motion_event_t *e = &motion.event[c & 0xFFu];
+            ev_name(t, id, nm);
+            draw_column(2, "FX", nm, "", T_MID, -1, ICON_AUTO);
+            fmt_int(val, (uint8_t)e->value);
+            draw_column(3, (e->param & MOTION_LOCK) ? "OFF AT" : "ON AT", val, "/256", T_MID, -1, ICON_AUTO);
+            return;
+        }
         if (!ev_id_ok(t, id)) {
             draw_column(2, "PARAM", "--", "", T_DIM, -1, ICON_AUTO);
             draw_column(3, "VALUE", "--", "", T_DIM, -1, ICON_AUTO);
@@ -1202,6 +1215,10 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
+        if (cur_page()->graph == GR_SLOTS && c == 1u) {
+            draw_act_column(c, "INIT", T_THEME, ICON_AUTO);
+            continue;
+        }
         if (!d || !d->label || d->label[0] == '-') {
             draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
             continue;
@@ -1358,6 +1375,10 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_CLEAR_SONG:
         str_cpy(a, "CLEAR SONG ORDER?", 24);
+        break;
+    case CF_INIT_PROJECT:
+        str_cpy(a, "INITIALIZE PROJECT?", 24);
+        str_cpy(b, "SAVED SLOTS KEPT", 24);
         break;
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);

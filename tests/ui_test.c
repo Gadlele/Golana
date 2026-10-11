@@ -168,6 +168,7 @@ static void ui_power_on(void)
     uint32_t i;
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
+    memset(&motion, 0, sizeof motion);
     memset(&chain, 0, sizeof chain);
     step_record_mask = 0;
     chain_defaults(&chain_config);
@@ -222,6 +223,10 @@ static void ui_power_on(void)
     memset(chord_last, 0, sizeof chord_last);
     perf_held = perf_act = kb_layer = perf_mask = 0;      /* the FX layer: nothing held */
     perf_latched = 0;
+    memset(perf_motion, 0, sizeof perf_motion);
+    memset(motion_fx_owner, 0, sizeof motion_fx_owner);
+    memset(motion_fx_next, 0, sizeof motion_fx_next);
+    motion_fx_recording = 0;
     memcpy((void *)perf_map, PF_DEF, sizeof PF_DEF);    /* .. its default key map (the settings' 0), no key's effect */
     perf_remap = 0;
     memset(kb_fx, 0, sizeof kb_fx);
@@ -1658,7 +1663,7 @@ static int test_menu_tabs(void)
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 7 6 2 5 rows), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 7u && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && mtab_rows(MTAB_AUDIO) == 6u &&
                  mtab_rows(MTAB_MIDI) == 2u && MI_TAB[MI_LCLEAR] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u && MI_TAB[MI_TUNE] == MTAB_AUDIO &&   /* (1.5: LEARN CLEAR, HELP) */
                  MI_TAB[MI_MIDIIN] == MTAB_MIDI && MI_TAB[MI_INFO] == MTAB_SYSTEM && MI_INFO >= MI_VALUES);
 

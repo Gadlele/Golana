@@ -1530,16 +1530,17 @@ static void graph_events(void)
             uint32_t id = MOTION_ID(e), lock = (e->param & MOTION_LOCK) != 0u;
             char b[16], nm[12];
             const char *unit;
-            const param_desc_t *d = track_desc(t, id);
+            const param_desc_t *d = MOTION_IS_FX(e) ? 0 : track_desc(t, id);
             int32_t x;
             b[0] = (char)('0' + ((e->place & 63u) + 1u) / 10u);
             b[1] = (char)('0' + ((e->place & 63u) + 1u) % 10u);
             b[2] = 0;
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, lock ? "LOCK" : "AUTO", sel ? T_INK : lock ? T_ACCENT : T_MID, bg);
+            cv_text_on(14, y + LIST_TY, &AF_M, MOTION_IS_FX(e) ? "FX" : lock ? "LOCK" : "AUTO", sel ? T_INK : lock ? T_ACCENT : T_MID, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
             cv_text_on(EV_SX, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
-            param_format(d, e->value, b, &unit);
+            if (MOTION_IS_FX(e)) { str_cpy(b, lock ? "OFF" : "ON", sizeof b); unit = ""; }
+            else param_format(d, e->value, b, &unit);
             ev_name(t, id, nm);
             x = ev_value(y, b, unit, sel ? T_INK : T_TEXT, bg);
             GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");

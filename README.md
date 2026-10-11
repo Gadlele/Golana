@@ -121,8 +121,18 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **STEP REC during playback:** on a melodic SEQ > STEP page, **hold SEQ and tap REC**. KNOB 1 / PRESETS selects
   the input step; panel keys enter notes/chords while the playhead continues independently. Repeat SEQ + REC
   to switch to LIVE REC; a normal REC tap disarms.
+- **Record FX-special performances:** LIVE REC now captures all fourteen white-key FX specials, including
+  REV THROW and ECHO THROW, with their press/release timing. Short taps, FX LATCH and holds across steps or
+  loop boundaries replay with the pattern and are saved with A–D.
+- **Global FX track:** hold HOME, open CONTROL and choose **FX TRACK T1–T4** (default T1). That track records
+  and replays global FX using its LEN/DIV, even while another sound track is selected. The setting saves
+  with the project; the effects process the master mix.
+- **Project INIT without rebooting:** SAVE > PROJECT now offers **INIT** on KNOB 2; OCT+ opens confirmation
+  and OCT+ again initializes. It restores boot sounds, empty sequences/automation and project defaults.
+  Stored A–D, USER sounds, FM6 banks, MIDI-learn mappings and device preferences remain intact.
 
-Details: [live parts and recording](docs/LIVE_PATTERNS.md).
+Details: [live parts and recording](docs/LIVE_PATTERNS.md),
+[FX-special automation](docs/FX_SPECIAL_AUTOMATION.md).
 
 ## New in 1.5.1
 
@@ -450,7 +460,8 @@ For more details, see [On AI-Assisted Development and Responsibility](https://gi
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
   [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
   [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
-  (live part switching and saves, STEP REC during playback)
+  (live part switching and saves, STEP REC during playback, FX-special recording,
+  global FX track and project INIT)
 
 ## Licence
 

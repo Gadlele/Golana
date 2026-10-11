@@ -485,6 +485,14 @@ EXPORT uint32_t web_test_cursor(void) { return ui.cursor; }
 EXPORT uint32_t web_test_step_note(uint32_t i, uint32_t k) { return i < NSTEP && k < TSEL->step[i].n ? TSEL->step[i].note[k] : 255u; }
 EXPORT uint32_t web_test_step_count(uint32_t i) { return i < NSTEP ? TSEL->step[i].n : 0; }
 EXPORT uint32_t web_test_seq_idx(void) { return TSEL->seq_idx; }
+EXPORT uint32_t web_test_fx_events(void)
+{
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < motion.count; i++) n += MOTION_IS_FX(&motion.event[i]);
+    return n;
+}
+EXPORT uint32_t web_test_fx_replay(void) { return perf_motion[0] | perf_motion[1] | perf_motion[2] | perf_motion[3]; }
+EXPORT uint32_t web_test_fx_live(void) { return perf_held | perf_latched; }
 
 EXPORT uint16_t *web_screen(void) { return web_fb; }
 EXPORT uint32_t web_screen_draws(void) { return web_draws; }

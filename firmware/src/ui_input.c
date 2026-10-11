@@ -1042,6 +1042,10 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
+    if (cur_page()->graph == GR_SLOTS && c == 1u) {
+        confirm_open(CF_INIT_PROJECT, 0);
+        return;
+    }
     if (cur_page()->graph == GR_EVENTS) {
         ev_oct();
         return;
@@ -1584,6 +1588,8 @@ static void ui_input(void)
                 }
             } else if (kind == CF_CLEAR_SONG) {
                 if (!chain_busy()) { chain_defaults(&chain_config); ui.song_row = 0; ui_message("SONG CLEARED"); }
+            } else if (kind == CF_INIT_PROJECT) {
+                project_init_runtime();
             } else if (kind == CF_INIT_SOUND) {
                 if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
             } else {
