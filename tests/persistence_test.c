@@ -56,8 +56,8 @@ static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../firmware/src/storage.c"
 #include "../firmware/src/upreset.c"
-#include "../firmware/src/patbank_store.c"
 #include "../firmware/src/project.c"
+#include "../firmware/src/patbank_store.c"
 
 enum { ED_UI_STATE = 34, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET };
 static uint8_t ed_rep[64];                        /* the reply's bytes (MENU_SET) */

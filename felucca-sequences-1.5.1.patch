@@ -1,4 +1,4 @@
-From 044cf1f29fcbd20d1bf3a160238110639d205aa9 Mon Sep 17 00:00:00 2001
+From ef20b88bdd741202269cc9d7ac45f7b6d3774249 Mon Sep 17 00:00:00 2001
 From: Felucca dev <dev@example.invalid>
 Date: Sat, 10 Oct 2026 14:53:08 +0000
 Subject: [PATCH] Eight sequences per track (FELUCCA_PATBANK): SEQ SWITCH,
@@ -25,8 +25,8 @@ v1.5.1_sequences. Based on 1.5.1.
  firmware/src/menu_items.c    |   8 +-
  firmware/src/params.c        |   5 +-
  firmware/src/patbank.c       | 318 ++++++++++++++++++++++++++
- firmware/src/patbank_store.c | 202 +++++++++++++++++
- firmware/src/project.c       |  92 +++++++-
+ firmware/src/patbank_store.c | 210 +++++++++++++++++
+ firmware/src/project.c       | 100 ++++++++-
  firmware/src/seq.c           |   2 +
  firmware/src/song_chain.c    |  26 ++-
  firmware/src/storage.c       |  24 +-
@@ -48,7 +48,7 @@ v1.5.1_sequences. Based on 1.5.1.
  tests/ui_test.c              |  97 +++++++-
  tools/build.py               |   2 +-
  web/emu/felucca_web.c        |   1 +
- 36 files changed, 1531 insertions(+), 89 deletions(-)
+ 36 files changed, 1547 insertions(+), 89 deletions(-)
  create mode 100644 firmware/src/patbank.c
  create mode 100644 firmware/src/patbank_store.c
  create mode 100644 tests/patbank_test.c
@@ -220,7 +220,7 @@ index b6245f4..de691f1 100644
          base = (uint32_t)(uintptr_t)(smp_user_xip(k) + SMP_USER_DATA) - (uint32_t)(uintptr_t)SMP_DATA;
          for (nz = h->nz, i = 0; i < nz; i++) {
 diff --git a/firmware/src/felucca.c b/firmware/src/felucca.c
-index 7242453..44786b0 100644
+index 7242453..bbad233 100644
 --- a/firmware/src/felucca.c
 +++ b/firmware/src/felucca.c
 @@ -32,7 +32,7 @@
@@ -232,14 +232,14 @@ index 7242453..44786b0 100644
  #endif
  #if FELUCCA_OTA && !FELUCCA_FLASH
  #error "FELUCCA_OTA needs FELUCCA_FLASH"
-@@ -92,6 +92,7 @@
- #include "storage.c"
+@@ -93,6 +93,7 @@
  #endif
  #include "upreset.c"             /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
-+#include "patbank_store.c"        /* the sequence banks in flash (patbank.c is part of ui.c) */
  #include "project.c"
++#include "patbank_store.c"        /* the sequence banks in flash (patbank.c is part of ui.c) */
  #if FELUCCA_OTA
  #include "ota.c"
+ #include "ota_hw.c"
 diff --git a/firmware/src/icons.c b/firmware/src/icons.c
 index c8edf03..ca8b782 100644
 --- a/firmware/src/icons.c
@@ -656,10 +656,10 @@ index 0000000..3ed263e
 +#endif
 diff --git a/firmware/src/patbank_store.c b/firmware/src/patbank_store.c
 new file mode 100644
-index 0000000..a220f55
+index 0000000..e436f98
 --- /dev/null
 +++ b/firmware/src/patbank_store.c
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,210 @@
 +/* SPDX-License-Identifier: GPL-3.0-only
 + * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 +/* The sequence banks in flash (patbank.c): store s (0..3 the projects A..D, PB_LIVE the music as it is now), six objects
@@ -671,7 +671,11 @@ index 0000000..a220f55
 +#if FELUCCA_PATBANK && FELUCCA_FLASH
 +#define PB_META_FIX (PB_HDR + 2u * PB_PAT_B + NTRK + PB_NSEQ + 2u * PB_NSEQ)
 +#define PB_META_RECS ((PB_OBJ_MAX - PB_META_FIX) / 3u)
-+static uint8_t pb_wire[PB_OBJ_MAX] __attribute__((aligned(4), section(".pool")));
++/* The object's RAM is the project staging RAM (project.c proj_wire_u): a save, a load and the autosave already take turns with
++ * it, and a backup noticing proj_wire_gen knows it was reused. It is not kept a 3.8 KB buffer of its own: the pool is full */
++#define pb_wire (proj_wire_u.raw)
++_Static_assert(sizeof proj_wire_u.raw >= PB_OBJ_MAX, "the sequence bank objects fit the project staging RAM");
++#define PB_WIRE_USE() (proj_wire_gen++)
 +
 +static uint32_t pb_obj_pats(uint32_t o) { return o < PB_META_O ? PB_PER : PB_NSEQ - PB_PER * PB_META_O; }
 +static uint32_t pb_records(void)            /* automation records the mirror holds outside the playing sequences */
@@ -687,6 +691,7 @@ index 0000000..a220f55
 +/* object o -> pb_wire; its length */
 +static uint32_t pb_build(uint32_t o)
 +{
++    PB_WIRE_USE();
 +    uint32_t n = pb_obj_pats(o), pos = PB_HDR, q;
 +    memset(pb_wire, 0, PB_HDR);
 +    pb_wire[0] = 'P'; pb_wire[1] = 'B'; pb_wire[2] = 1; pb_wire[3] = (uint8_t)o;
@@ -733,6 +738,7 @@ index 0000000..a220f55
 + * (the mirror holds just the loaded music, pb_reset_to_live) */
 +static int pb_store_load(uint32_t s)
 +{
++    PB_WIRE_USE();
 +    uint32_t o, q, t, pos, n;
 +    uint8_t cur[NTRK], len[PB_NSEQ], cnt[PB_NSEQ], on[PB_NSEQ];
 +    pb_reset_to_live();
@@ -796,6 +802,7 @@ index 0000000..a220f55
 + * for each track (its record plays that one); 0 when there is no such store (the record's is "sequence 1") */
 +static int pb_store_saved(uint32_t s, uint8_t *cur)
 +{
++    PB_WIRE_USE();
 +    uint32_t n, t;
 +    memset(cur, 0, NTRK);
 +    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + PB_META_O, pb_wire, sizeof pb_wire);
@@ -809,6 +816,7 @@ index 0000000..a220f55
 + * 1 no such store or object (the sequence is empty, LEN the default) */
 +static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo)
 +{
++    PB_WIRE_USE();
 +    uint32_t n, qi = k * PB_N + q, pos, o, i, skip = 0, cnt;
 +    uint8_t cur[NTRK];
 +    for (i = 0; i < NSTEP; i++)
@@ -863,10 +871,25 @@ index 0000000..a220f55
 +}
 +#endif
 diff --git a/firmware/src/project.c b/firmware/src/project.c
-index 2b03960..b547fb6 100644
+index 2b03960..f53fef7 100644
 --- a/firmware/src/project.c
 +++ b/firmware/src/project.c
-@@ -846,6 +846,15 @@ static int project_save_as(uint32_t slot, const char *name)
+@@ -475,6 +475,14 @@ static void proj_fm6_init(project_t *q)
+         memcpy(q->fm6[t], FM6_INIT, FM6_PACKED);
+     q->sum = proj_sum(q);
+ }
++#if FELUCCA_PATBANK && FELUCCA_FLASH
++/* the sequence banks (patbank_store.c, included after this file: its object RAM is proj_wire) */
++static int pb_store_save(uint32_t s, uint32_t mask);
++static int pb_store_load(uint32_t s);
++static int pb_flush_live(void);
++static int pb_store_saved(uint32_t s, uint8_t *cur);
++static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo);
++#endif
+ static int proj_import_old(project_t *q, const void *b, int n);
+ static int proj_import_any(project_t *q, const void *b, int n);
+ /* every track's engine one this firmware has (DIGITAL, 1, is one: it converts): a project of another number
+@@ -846,6 +854,15 @@ static int project_save_as(uint32_t slot, const char *name)
          ui_message("STOP TO SAVE");                     /* sequencer (storage_hw.c): only while stopped */
          return 1;
      }
@@ -882,7 +905,7 @@ index 2b03960..b547fb6 100644
      project_capture(p);
      if (name) {
          memset(p->name, 0, sizeof p->name);
-@@ -1034,6 +1043,9 @@ static int project_restore_runtime(const project_t *input)
+@@ -1034,6 +1051,9 @@ static int project_restore_runtime(const project_t *input)
          pat_sig[k] = ~steps_sig(t);                     /* a project's steps are the user's */
      }
      undo_depth--;
@@ -892,7 +915,7 @@ index 2b03960..b547fb6 100644
      sync_reload = 1;
      ui.force = 1;
      ui_message("LOADED");
-@@ -1050,6 +1062,10 @@ static void project_load(uint32_t slot)
+@@ -1050,6 +1070,10 @@ static void project_load(uint32_t slot)
      if (!project_restore_runtime(&proj_scratch)) {
          proj_cur = (uint8_t)(slot & 3u);
          pat_from_set((slot & 3u) + 1u);
@@ -903,7 +926,7 @@ index 2b03960..b547fb6 100644
      }
  }
  
-@@ -1105,18 +1121,47 @@ static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj
+@@ -1105,18 +1129,47 @@ static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj
  static uint32_t chain_prepare(void)
  {
      uint32_t i, k, j, used = 0;
@@ -956,7 +979,7 @@ index 2b03960..b547fb6 100644
          }
      chain.config = chain_config;
      for (i = 0; i < 4u; i++)
-@@ -1143,6 +1188,30 @@ static uint32_t chain_prepare(void)
+@@ -1143,6 +1196,30 @@ static uint32_t chain_prepare(void)
                      chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
                          TP[P_SLEN + j].min, TP[P_SLEN + j].max);
              }
@@ -987,7 +1010,7 @@ index 2b03960..b547fb6 100644
          }
      RING_PUBLISH();
      chain.armed = 1;
-@@ -1239,6 +1308,10 @@ static uint32_t autosave_sig(void)
+@@ -1239,6 +1316,10 @@ static uint32_t autosave_sig(void)
          if (i != G_SLOT && i != G_NAME && i != G_LOAD && i != G_SAVE)
              h = as_mix(h, &song.g[i], sizeof song.g[i]);
      h = as_mix(h, &motion, sizeof motion);
@@ -998,7 +1021,7 @@ index 2b03960..b547fb6 100644
      h = as_mix(h, &chain_config, sizeof chain_config);
      return as_mix(h, proj_name, sizeof proj_name);
  }
-@@ -1277,6 +1350,12 @@ static void autosave_poll(void)
+@@ -1277,6 +1358,12 @@ static void autosave_poll(void)
          return;
      as.last = fm1_ms;
      as.wrote = 1;
@@ -1011,7 +1034,7 @@ index 2b03960..b547fb6 100644
      project_capture(&proj_scratch);
      proj_wire_gen++;
      as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0;
-@@ -1301,6 +1380,9 @@ static int autosave_boot(int allowed)
+@@ -1301,6 +1388,9 @@ static int autosave_boot(int allowed)
          if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
              proj_bound(&proj_scratch);
              if (!project_restore_runtime(&proj_scratch)) {
@@ -1691,17 +1714,17 @@ index ff1c15b..37ab0d1 100644
  /* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
  static struct { step_t step[NSTEP]; motion_store_t mo; } tl_open __attribute__((section(".pool")));
 diff --git a/tests/backup_test.c b/tests/backup_test.c
-index 709c3cb..720caf1 100644
+index 709c3cb..a834fa8 100644
 --- a/tests/backup_test.c
 +++ b/tests/backup_test.c
-@@ -36,6 +36,7 @@ static void fl_plain_window_init(void) {}
- #define FL_FAR(fn) (fn)
+@@ -37,6 +37,7 @@ static void fl_plain_window_init(void) {}
  #include "../firmware/src/storage.c"
  #include "../firmware/src/upreset.c"
-+#include "../firmware/src/patbank_store.c"
  #include "../firmware/src/project.c"
++#include "../firmware/src/patbank_store.c"
  #include "old_pack.h"
  
+ enum { ED_BACKUP_LIST = 65, ED_BACKUP_GET, ED_BACKUP_PUT };
 diff --git a/tests/detail_test.c b/tests/detail_test.c
 index 0af4326..d73764b 100644
 --- a/tests/detail_test.c
@@ -1729,17 +1752,17 @@ index 0af4326..d73764b 100644
  }
  
 diff --git a/tests/editor_test.c b/tests/editor_test.c
-index 8ec68d2..9e3ace8 100644
+index 8ec68d2..f1c127f 100644
 --- a/tests/editor_test.c
 +++ b/tests/editor_test.c
-@@ -45,6 +45,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
- #include "../firmware/src/menu_items.c"
+@@ -46,6 +46,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
  static void panel_setup(void) {}
  #include "../firmware/src/upreset.c"
-+#include "../firmware/src/patbank_store.c"
  #include "../firmware/src/project.c"
++#include "../firmware/src/patbank_store.c"
  
  static uint32_t flash_ok = 1;
+ static void audio_silence(void) {}
 @@ -181,7 +182,7 @@ static int preferences(void)
          host_wire[n - 33] == 0 &&                        /* (no bank since 1.0.3) */
          host_wire[n - 32] == 0x53 && host_wire[n - 31] == 1 && host_wire[n - 30] == 3 &&
@@ -1828,20 +1851,20 @@ index 8ec68d2..9e3ace8 100644
          ok &= menu_set(127, 0) == 1 && host_wire[6] == 127;
          ok &= !memcmp(fav0, &favorites, sizeof favorites) && !memcmp(set0, &settings, sizeof settings) &&
 diff --git a/tests/fm6bank_test.c b/tests/fm6bank_test.c
-index 034e8b5..a59b0cb 100644
+index 034e8b5..7213d5f 100644
 --- a/tests/fm6bank_test.c
 +++ b/tests/fm6bank_test.c
-@@ -69,6 +69,7 @@ static void fl_plain_window_init(void) {}
- #define FL_FAR(fn) (fn)
+@@ -70,6 +70,7 @@ static void fl_plain_window_init(void) {}
  #include "../firmware/src/storage.c"
  #include "../firmware/src/upreset.c"
-+#include "../firmware/src/patbank_store.c"
  #include "../firmware/src/project.c"
++#include "../firmware/src/patbank_store.c"
  
  static uint8_t rep[1024];                         /* the editor's reply */
+ static uint32_t rep_n;
 diff --git a/tests/patbank_test.c b/tests/patbank_test.c
 new file mode 100644
-index 0000000..6dd3474
+index 0000000..8eb6fce
 --- /dev/null
 +++ b/tests/patbank_test.c
 @@ -0,0 +1,422 @@
@@ -1897,8 +1920,8 @@ index 0000000..6dd3474
 +#define FL_FAR(fn) (fn)
 +#include "../firmware/src/storage.c"
 +#include "../firmware/src/upreset.c"
-+#include "../firmware/src/patbank_store.c"
 +#include "../firmware/src/project.c"
++#include "../firmware/src/patbank_store.c"
 +
 +#define PB_BASE_END (OBJ_PB_BASE + OBJ_PB_N * 2u * ST_SECTOR)
 +_Static_assert(PB_BASE_END <= 0xDC000u, "the sequence banks overrun the user preset banks");
@@ -2268,17 +2291,17 @@ index 0000000..6dd3474
 +    return bad != 0;
 +}
 diff --git a/tests/persistence_test.c b/tests/persistence_test.c
-index 95c44a5..a7b1aa2 100644
+index 95c44a5..85b3c30 100644
 --- a/tests/persistence_test.c
 +++ b/tests/persistence_test.c
-@@ -56,6 +56,7 @@ static void fl_plain_window_init(void) {}
- #define FL_FAR(fn) (fn)
+@@ -57,6 +57,7 @@ static void fl_plain_window_init(void) {}
  #include "../firmware/src/storage.c"
  #include "../firmware/src/upreset.c"
-+#include "../firmware/src/patbank_store.c"
  #include "../firmware/src/project.c"
++#include "../firmware/src/patbank_store.c"
  
  enum { ED_UI_STATE = 34, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET };
+ static uint8_t ed_rep[64];                        /* the reply's bytes (MENU_SET) */
 diff --git a/tests/run_tests.sh b/tests/run_tests.sh
 index 01afa55..bcefd6e 100755
 --- a/tests/run_tests.sh
@@ -2415,17 +2438,17 @@ index a6618b2..ad4983c 100644
          ui.menu = 3; ui.menu_sel = MI_INFO; song.cpu_q8 = 87u;   /* (34 %; USB: the host has none, OFF) */
          info.t = fm1_ms - INFO_CPU_MS;
 diff --git a/tests/ui_test.c b/tests/ui_test.c
-index c66050f..5ff0bb4 100644
+index c66050f..cb0e82b 100644
 --- a/tests/ui_test.c
 +++ b/tests/ui_test.c
-@@ -154,6 +154,7 @@ static struct { uint32_t stage; } felucca_dbg;
- #include "../firmware/src/ui_input.c"
+@@ -155,6 +155,7 @@ static struct { uint32_t stage; } felucca_dbg;
  #include "../firmware/src/ui_layer.c"
  #include "../firmware/src/upreset.c"
-+#include "../firmware/src/patbank_store.c"
  #include "../firmware/src/project.c"
++#include "../firmware/src/patbank_store.c"
  
  static int check(const char *what, int ok)
+ {
 @@ -1649,10 +1650,10 @@ static int test_menu_tabs(void)
              }
      }
@@ -2610,17 +2633,17 @@ index a92334d..204c85f 100755
          v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
          if v in ("0", "1"):
 diff --git a/web/emu/felucca_web.c b/web/emu/felucca_web.c
-index cc77a42..8950349 100644
+index cc77a42..f26d72d 100644
 --- a/web/emu/felucca_web.c
 +++ b/web/emu/felucca_web.c
-@@ -204,6 +204,7 @@ static void fl_plain_window_init(void) {}
- #define FL_FAR(fn) (fn)
+@@ -205,6 +205,7 @@ static void fl_plain_window_init(void) {}
  #include "../../firmware/src/storage.c"
  #include "../../firmware/src/upreset.c"
-+#include "../../firmware/src/patbank_store.c"
  #include "../../firmware/src/project.c"
++#include "../../firmware/src/patbank_store.c"
  
  /* ------------------------------------------------- main.c and its HAL --- */
+ typedef struct { uint32_t magic, count, vec, pc, emu, dbg, rets; } fm1_crash_t;
 -- 
 2.43.0
 

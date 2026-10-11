@@ -9,7 +9,11 @@
 #if FELUCCA_PATBANK && FELUCCA_FLASH
 #define PB_META_FIX (PB_HDR + 2u * PB_PAT_B + NTRK + PB_NSEQ + 2u * PB_NSEQ)
 #define PB_META_RECS ((PB_OBJ_MAX - PB_META_FIX) / 3u)
-static uint8_t pb_wire[PB_OBJ_MAX] __attribute__((aligned(4), section(".pool")));
+/* The object's RAM is the project staging RAM (project.c proj_wire_u): a save, a load and the autosave already take turns with
+ * it, and a backup noticing proj_wire_gen knows it was reused. It is not kept a 3.8 KB buffer of its own: the pool is full */
+#define pb_wire (proj_wire_u.raw)
+_Static_assert(sizeof proj_wire_u.raw >= PB_OBJ_MAX, "the sequence bank objects fit the project staging RAM");
+#define PB_WIRE_USE() (proj_wire_gen++)
 
 static uint32_t pb_obj_pats(uint32_t o) { return o < PB_META_O ? PB_PER : PB_NSEQ - PB_PER * PB_META_O; }
 static uint32_t pb_records(void)            /* automation records the mirror holds outside the playing sequences */
@@ -25,6 +29,7 @@ static int pb_meta_ok(void) { return pb_records() <= PB_META_RECS; }
 /* object o -> pb_wire; its length */
 static uint32_t pb_build(uint32_t o)
 {
+    PB_WIRE_USE();
     uint32_t n = pb_obj_pats(o), pos = PB_HDR, q;
     memset(pb_wire, 0, PB_HDR);
     pb_wire[0] = 'P'; pb_wire[1] = 'B'; pb_wire[2] = 1; pb_wire[3] = (uint8_t)o;
@@ -71,6 +76,7 @@ static int pb_store_save(uint32_t s, uint32_t mask)
  * (the mirror holds just the loaded music, pb_reset_to_live) */
 static int pb_store_load(uint32_t s)
 {
+    PB_WIRE_USE();
     uint32_t o, q, t, pos, n;
     uint8_t cur[NTRK], len[PB_NSEQ], cnt[PB_NSEQ], on[PB_NSEQ];
     pb_reset_to_live();
@@ -134,6 +140,7 @@ static int pb_store_load(uint32_t s)
  * for each track (its record plays that one); 0 when there is no such store (the record's is "sequence 1") */
 static int pb_store_saved(uint32_t s, uint8_t *cur)
 {
+    PB_WIRE_USE();
     uint32_t n, t;
     memset(cur, 0, NTRK);
     n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + PB_META_O, pb_wire, sizeof pb_wire);
@@ -147,6 +154,7 @@ static int pb_store_saved(uint32_t s, uint8_t *cur)
  * 1 no such store or object (the sequence is empty, LEN the default) */
 static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo)
 {
+    PB_WIRE_USE();
     uint32_t n, qi = k * PB_N + q, pos, o, i, skip = 0, cnt;
     uint8_t cur[NTRK];
     for (i = 0; i < NSTEP; i++)

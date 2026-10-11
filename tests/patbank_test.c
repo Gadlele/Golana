@@ -50,8 +50,8 @@ static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../firmware/src/storage.c"
 #include "../firmware/src/upreset.c"
-#include "../firmware/src/patbank_store.c"
 #include "../firmware/src/project.c"
+#include "../firmware/src/patbank_store.c"
 
 #define PB_BASE_END (OBJ_PB_BASE + OBJ_PB_N * 2u * ST_SECTOR)
 _Static_assert(PB_BASE_END <= 0xDC000u, "the sequence banks overrun the user preset banks");

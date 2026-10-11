@@ -204,8 +204,8 @@ static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../../firmware/src/storage.c"
 #include "../../firmware/src/upreset.c"
-#include "../../firmware/src/patbank_store.c"
 #include "../../firmware/src/project.c"
+#include "../../firmware/src/patbank_store.c"
 
 /* ------------------------------------------------- main.c and its HAL --- */
 typedef struct { uint32_t magic, count, vec, pc, emu, dbg, rets; } fm1_crash_t;

@@ -475,6 +475,14 @@ static void proj_fm6_init(project_t *q)
         memcpy(q->fm6[t], FM6_INIT, FM6_PACKED);
     q->sum = proj_sum(q);
 }
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+/* the sequence banks (patbank_store.c, included after this file: its object RAM is proj_wire) */
+static int pb_store_save(uint32_t s, uint32_t mask);
+static int pb_store_load(uint32_t s);
+static int pb_flush_live(void);
+static int pb_store_saved(uint32_t s, uint8_t *cur);
+static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo);
+#endif
 static int proj_import_old(project_t *q, const void *b, int n);
 static int proj_import_any(project_t *q, const void *b, int n);
 /* every track's engine one this firmware has (DIGITAL, 1, is one: it converts): a project of another number

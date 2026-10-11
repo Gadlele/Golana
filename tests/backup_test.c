@@ -36,8 +36,8 @@ static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../firmware/src/storage.c"
 #include "../firmware/src/upreset.c"
-#include "../firmware/src/patbank_store.c"
 #include "../firmware/src/project.c"
+#include "../firmware/src/patbank_store.c"
 #include "old_pack.h"
 
 enum { ED_BACKUP_LIST = 65, ED_BACKUP_GET, ED_BACKUP_PUT };

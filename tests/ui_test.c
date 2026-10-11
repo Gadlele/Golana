@@ -154,8 +154,8 @@ static struct { uint32_t stage; } felucca_dbg;
 #include "../firmware/src/ui_input.c"
 #include "../firmware/src/ui_layer.c"
 #include "../firmware/src/upreset.c"
-#include "../firmware/src/patbank_store.c"
 #include "../firmware/src/project.c"
+#include "../firmware/src/patbank_store.c"
 
 static int check(const char *what, int ok)
 {

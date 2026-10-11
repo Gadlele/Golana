@@ -92,8 +92,8 @@
 #include "storage.c"
 #endif
 #include "upreset.c"             /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
-#include "patbank_store.c"        /* the sequence banks in flash (patbank.c is part of ui.c) */
 #include "project.c"
+#include "patbank_store.c"        /* the sequence banks in flash (patbank.c is part of ui.c) */
 #if FELUCCA_OTA
 #include "ota.c"
 #include "ota_hw.c"

@@ -45,8 +45,8 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #include "../firmware/src/menu_items.c"
 static void panel_setup(void) {}
 #include "../firmware/src/upreset.c"
-#include "../firmware/src/patbank_store.c"
 #include "../firmware/src/project.c"
+#include "../firmware/src/patbank_store.c"
 
 static uint32_t flash_ok = 1;
 static void audio_silence(void) {}
