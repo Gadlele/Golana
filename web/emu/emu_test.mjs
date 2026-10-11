@@ -171,6 +171,46 @@ liveReboot.render(600);
 check("A-D remain saved in a fresh emulator instance", [0, 1, 2, 3].every((i) => liveReboot.ex.web_test_project_used(i) === 1) &&
       liveReboot.ex.web_test_project_ram_mask() === 0);
 
+// ---- STEP REC from the panel while the playhead keeps running
+const stepLive = await device(null);
+stepLive.render(1000);
+stepLive.ex.web_test_heavy();
+stepLive.tap(B.SEQ);
+stepLive.turn(EN.K1, 8);
+stepLive.tap(B.PLAY);
+const modeGesture = () => {
+  stepLive.ex.web_buttons(1 << B.SEQ); stepLive.render(60);
+  stepLive.ex.web_buttons((1 << B.SEQ) | (1 << B.REC)); stepLive.render(60);
+  stepLive.ex.web_buttons(1 << B.SEQ); stepLive.render(60);
+  stepLive.ex.web_buttons(0); stepLive.render(60);
+};
+modeGesture();
+check("SEQ + REC: STEP REC armed during playback, independent cursor at step 8",
+      stepLive.ex.web_test_step_record_mask() === 1 && stepLive.ex.web_playing() === 1 && stepLive.ex.web_test_cursor() === 8);
+stepLive.ex.web_keys(1 << 1); stepLive.render(60);
+stepLive.ex.web_keys((1 << 1) | (1 << 7)); stepLive.render(60);
+check("STEP REC: physical keys write a chord at the cursor, playhead unchanged",
+      stepLive.ex.web_test_step_count(8) === 2 && stepLive.ex.web_test_cursor() === 8 &&
+      stepLive.ex.web_test_step_count(stepLive.ex.web_test_seq_idx()) === 4);
+stepLive.ex.web_keys(0); stepLive.render(60);
+const headBeforeStep = stepLive.ex.web_test_seq_idx();
+stepLive.render(600);
+check("STEP REC: releasing advances cursor once, playback advances separately",
+      stepLive.ex.web_test_cursor() === 9 && stepLive.ex.web_playing() === 1 &&
+      stepLive.ex.web_test_seq_idx() !== headBeforeStep);
+stepLive.turn(EN.K1, -5); // choose step 4, away from the live playhead
+modeGesture();
+const beforeLiveNotes = Array.from({length: 16}, (_, i) => stepLive.ex.web_test_step_note(i, 3));
+stepLive.ex.web_keys(1 << 26); stepLive.render(60); // G5 is absent from the prepared chords
+stepLive.ex.web_keys(0); stepLive.render(60);
+check("SEQ + REC again: LIVE REC keeps the cursor, records at the playhead",
+      stepLive.ex.web_test_step_record_mask() === 0 && stepLive.ex.web_playing() === 1 &&
+      stepLive.ex.web_test_cursor() === 4 && stepLive.ex.web_test_step_note(4, 3) === beforeLiveNotes[4] &&
+      beforeLiveNotes.some((note, i) => stepLive.ex.web_test_step_note(i, 3) !== note));
+stepLive.tap(B.REC);
+check("normal REC disarms without stopping playback", stepLive.ex.web_playing() === 1 &&
+      !(stepLive.ex.web_lit_buttons() & (1 << B.REC)));
+
 // ---- deterministic: the same gestures, the same samples
 async function song() {
   const d = await device(null);

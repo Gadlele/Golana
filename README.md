@@ -118,6 +118,9 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **Save parts while playing:** SAVE > PROJECT can save separate snapshots to A–D while playback and recording
   continue. They are immediately available for live LOAD and marked **RAM ONLY** until **STOP automatically
   commits them to flash**.
+- **STEP REC during playback:** on a melodic SEQ > STEP page, **hold SEQ and tap REC**. KNOB 1 / PRESETS selects
+  the input step; panel keys enter notes/chords while the playhead continues independently. Repeat SEQ + REC
+  to switch to LIVE REC; a normal REC tap disarms.
 
 Details: [live parts and recording](docs/LIVE_PATTERNS.md).
 
@@ -447,7 +450,7 @@ For more details, see [On AI-Assisted Development and Responsibility](https://gi
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
   [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
   [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
-  (live part switching and saves)
+  (live part switching and saves, STEP REC during playback)
 
 ## Licence
 

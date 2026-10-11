@@ -737,6 +737,10 @@ static void draw_foot(void)
         str_cpy(ti, "HOME", sizeof ti);
     else                                               /* page title + number in its family: "ENV DEST 2/2" */
         page_title(ti);
+    if (!ui.home && pg->graph == GR_ROLL && !drum_track(t) && ((song.rec >> song.sel) & 1u)) {
+        if ((step_record_mask >> song.sel) & 1u) str_cpy(ti, "STEP REC", sizeof ti);
+        else if (song.playing) str_cpy(ti, "LIVE REC", sizeof ti);
+    }
     str_cpy(s, ename, sizeof s);
     s[str_len(s) + 1u] = 0;
     s[str_len(s)] = (char)('1' + song.sel);

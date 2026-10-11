@@ -556,6 +556,7 @@ static uint32_t song_leds(void)
 static int rec_tap(void)                                /* 1: the arming changed */
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
+    uint32_t f;
     if (chain_busy()) {
         ui_message("STOP TO RECORD");
         return 0;
@@ -564,7 +565,12 @@ static int rec_tap(void)                                /* 1: the arming changed
         ui_message("[SEQ] TO RECORD");
         return 0;
     }
+    f = motion_guard();
+    step_record_mask &= (uint8_t)~bit;
     song.rec ^= bit;
+    TSEL->rh_n = TSEL->rskip_n = 0;
+    ui.entry_open = 0;
+    motion_unguard(f);
     ui.force = 1;                                     /* also refresh the status on MENU / ABOUT */
     if ((song.rec & bit) && !song.playing && !seq_counting() && roll_on()) {
         ui_message(ui_prefs2 & (PREF_CHORD_ADD >> 16) ? "KEYS ADD TO STEP" : "KEYS WRITE STEPS");   /* step recording:
@@ -583,7 +589,26 @@ static int rec_tap(void)                                /* 1: the arming changed
 /* live recording into the selected track now: the STEP page's key entry pauses meanwhile */
 static int live_rec_sel(void)
 {
-    return ((song.rec >> song.sel) & 1u) && (song.playing || transport_req == 1u || seq_counting());
+    return (((song.rec & ~step_record_mask) >> song.sel) & 1u) && (song.playing || transport_req == 1u || seq_counting());
+}
+
+/* SEQ held + REC tapped on the piano roll: choose cursor entry independently
+ * of transport. Changing mode with held input notes would split their recording. */
+static void step_rec_toggle(void)
+{
+    uint32_t bit = 1u << song.sel, f;
+    track_t *t = TSEL;
+    if (!roll_on()) { ui_message("OPEN SEQ STEP"); return; }
+    if (chain_busy()) { ui_message("STOP SONG FIRST"); return; }
+    if (fm1_in.notes || t->nheld) { ui_message("RELEASE KEYS"); return; }
+    f = motion_guard();
+    step_record_mask ^= (uint8_t)bit;
+    song.rec |= (uint8_t)bit;
+    t->rh_n = t->rskip_n = 0;
+    ui.entry_open = 0;
+    motion_unguard(f);
+    ui.force = 1;
+    ui_message(step_record_mask & bit ? "STEP REC" : "LIVE REC");
 }
 
 /* the OCT- / OCT+ dialog (ui_draw.c draws it); trk: the track or the slot it is about */
@@ -1159,7 +1184,7 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
     }
 }
 
-/* SEQ step entry = step recording (1.2, Discussion #133: only with the track armed and the transport stopped), acid
+/* SEQ step entry = step recording (armed and stopped, or explicitly STEP REC while playing), acid
  * style: the keys pressed together (POLY: up to 4 notes, MONO: the last one) become the cursor step; releasing all
  * keys moves on one step (wrapping inside LEN). With CHRD on a key writes what it sounds, as live recording does:
  * POLY its chord, MONO the chord's root. MENU > CONTROL > CHORD ENTRY ADD (1.2, #155): each key adds its notes to
@@ -1168,7 +1193,8 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
 static void seq_entry(uint32_t pressed)
 {
     track_t *t = TSEL;
-    step_t *st = &t->step[ui.cursor];
+    uint32_t cursor = ui.cursor, f;
+    step_t next = t->step[cursor], *st = &next;     /* prepare off-line, publish one coherent step */
     uint32_t k, add = (ui_prefs2 & (PREF_CHORD_ADD >> 16)) != 0u;
     for (k = 0; k < 27u; k++) {
         uint8_t ch[CHORD_MAX];
@@ -1203,6 +1229,15 @@ static void seq_entry(uint32_t pressed)
         }
         last_note = (uint8_t)note;
     }
+    f = motion_guard();
+    if (!((song.rec >> trk_index(t)) & 1u) || chain_busy()) {
+        ui.entry_open = 0;
+        motion_unguard(f);
+        return;
+    }
+    if (pressed)
+        memcpy(&t->step[cursor], &next, sizeof next);
+    motion_unguard(f);
     if (ui.entry_open && !(fm1_in.notes & ~kb_layer)) {
         if (add)
             ui.entry_open = 0;                          /* (ADD: the cursor stays) */
@@ -1494,8 +1529,10 @@ static void ui_input(void)
             song.seq_mode = 0;
         }
     }
-    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on())   /* REC pressed in another layer (REC alone: */
-        rec_tap();                                      /* its layer's tap); nothing in the menu, a dialog or NAME */
+    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on()) {
+        if (fm1_in.buttons & (1u << panel.btn[B_SEQ])) step_rec_toggle();
+        else rec_tap();
+    }
     if (ui.menu) {                                      /* SAVE / REC taps do nothing here (HOME: above) */
         if (ui.save_t0)
             ui.save_t0 |= 2u;
@@ -1644,12 +1681,11 @@ static void ui_input(void)
     } else if (song.grid) {
         grid_keys(notes);
     } else if (song.seq_mode && cur_page()->graph == GR_ROLL) {   /* STEP */
-        if (live_rec_sel() || !((song.rec >> song.sel) & 1u))   /* armed and playing: the keys record live, not
-                                                         * into the cursor step too; not armed (1.2, #133): they
-                                                         * only play, being on STEP writes nothing */
+        if (seq_counting() || live_rec_sel() || !((song.rec >> song.sel) & 1u)) /* LIVE REC uses the playhead;
+                                                         * unarmed keys only play */
             ui.entry_open = 0;
         else if (!chain_busy())
-            seq_entry(notes);                           /* armed and stopped: step recording at the cursor */
+            seq_entry(notes);                           /* STEP REC uses the cursor even during playback */
         else if (notes)
             ui_message("STOP TO EDIT");
     }
