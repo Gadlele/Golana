@@ -31,6 +31,23 @@ Holds can cross steps and loop boundaries. Different effects stack as before;
 the last activated buffer effect has priority. Live keys remain independent:
 a recorded release cannot release a key you are holding manually.
 
+## Editing start and duration
+
+Select an FX ON or OFF row with KNOB1 or PRESETS on SEQ > AUTOMATION. KNOB2
+changes STEP, retaining the fine position; KNOB4 changes only the fine position.
+For example, ON at step 3 and OFF at step 7 lasts four steps: move ON to step 5
+to shorten it to two, or move OFF to step 9 to lengthen it to six. OFF before ON
+means a hold across the loop end. Steps use the track's swung clock; changing
+the tempo keeps the relative timing.
+
+While playing, the replay state and next deadline are refreshed at the current
+playhead. Notes, transport and manual hold/latch controls keep their state.
+Equal-time edges of the same effect show FX TIME OCCUPIED; the move and previous
+undo stay intact. End any unfinished FX take on this track first (END FX REC
+FIRST). Active SONG retains STOP TO EDIT. Other tracks and parameter events are
+untouched. Edges are independent, so moving across other takes changes their
+combined timeline; the normal redundant-OFF cleanup still applies on save/load.
+
 ## Saving, clearing and limits
 
 - SAVE during playback captures the duration of any recorded hold **up to the
@@ -40,7 +57,10 @@ a recorded release cannot release a key you are holding manually.
   Live held/latched controls retain their existing behavior. Captured holds are
   closed before STOP or a live part switch so they do not become orphan events.
 - SEQ > AUTOMATION lists each edge as FX, the effect name and ON/OFF. The cards
-  also show its phase within the step. Effect identity and ON/OFF kind are fixed.
+  also show its phase within the step. KNOB2 moves the selected ON or OFF to
+  another step; KNOB4 edits its ON AT/OFF AT phase (0-255/256). The other edge
+  stays put, so these edits change the start or duration independently. Effect
+  identity and ON/OFF kind are fixed. SAVE held undoes/redoes each knob gesture.
   EDIT deletes that effect's complete event lane on the selected track. UNDO
   restores the lane. CLEAR removes all automation on that track; PLAY OFF
   bypasses it. Other tracks' events stay intact.

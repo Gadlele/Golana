@@ -18,6 +18,7 @@ static uint8_t motion_fx_owner[PF_NFX]; /* capture owner + 1; releases follow th
 static uint16_t motion_fx_next[NTRK];   /* next phase worth scanning; 256 = no event in this step */
 static __attribute__((noinline)) void motion_fx_close(void);
 static void motion_fx_snapshot(motion_store_t *m, uint32_t tracks);
+static void motion_fx_refresh(track_t *t);
 _Static_assert(MOTION_FX_FIRST + PF_NFX == 128u, "FX schema is fourteen stable effects");
 static uint32_t motion_fx_reserved(void)
 {
@@ -384,7 +385,10 @@ static void motion_snapshot_track(track_t *t, motion_store_t *out)
     for (i = 0; i < motion.count; i++)
         if ((motion.event[i].place >> 6) == k) out->event[out->count++] = motion.event[i];
     motion_fx_meta(out);
-    motion_fx_snapshot(out, 1u << k);
+    /* Closed, edited timelines are copied byte-for-byte for undo/redo. Only
+     * an unfinished live take needs a synthetic release and OFF cleanup. */
+    for (uint32_t e = 0; e < PF_NFX; e++)
+        if (motion_fx_owner[e] == k + 1u) { motion_fx_snapshot(out, 1u << k); break; }
     motion_unguard(f);
 }
 static int motion_replace_track(track_t *t, const motion_store_t *in)
@@ -542,6 +546,97 @@ static void motion_fx_position(track_t *t, uint32_t *step, uint32_t *phase)
     length = step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), *step);
     *phase = length ? t->seq_pos * 256u / length : 0u;
     if (*phase > 255u) *phase = 255u;
+}
+/* Main-loop FX editing: keep each edge independent. Equal-time edges of the
+ * same effect are rejected (including ON/OFF: no zero-duration pair). A live
+ * capture on this track must end first, so its reserved OFF and undo snapshot
+ * cannot change underneath the edit. No records or metadata are added. */
+static int motion_fx_edit_ok(const track_t *t, uint32_t i, uint32_t step, uint32_t phase)
+{
+    uint32_t k = trk_index(t);
+    if (i >= motion.count || !MOTION_IS_FX(&motion.event[i]) ||
+        (motion.event[i].place >> 6) != k || step >= NSTEP || phase > 255u) return 1;
+    for (uint32_t e = 0; e < PF_NFX; e++)
+        if (motion_fx_owner[e] == k + 1u) return 2;
+    uint32_t place = k << 6 | step, id = MOTION_ID(&motion.event[i]);
+    for (uint32_t j = 0; j < motion.count; j++)
+        if (j != i && motion.event[j].place == place && MOTION_ID(&motion.event[j]) == id &&
+            (uint8_t)motion.event[j].value == phase) return 3;
+    return 0;
+}
+/* Move only the selected record. Insertion preserves the order of all other
+ * records and the original press order at equal times. Imported/undo stores
+ * need not be ordered across steps: only FX within the destination step must
+ * remain ordered by phase. Return the moved record's new index, or MOTION_MAX. */
+static uint32_t motion_fx_move(track_t *t, uint32_t i, uint32_t step, uint32_t phase)
+{
+    uint32_t f = motion_guard();
+    if (motion_fx_edit_ok(t, i, step, phase)) { motion_unguard(f); return MOTION_MAX; }
+    motion_event_t e = motion.event[i];
+    uint32_t place = trk_index(t) << 6 | step, lo = 0, hi = motion.count - 1u;
+    for (uint32_t j = 0; j < motion.count; j++) {
+        const motion_event_t *v = &motion.event[j];
+        if (j == i || !MOTION_IS_FX(v) || v->place != place) continue;
+        uint32_t at = j - (j > i), ph = (uint8_t)v->value;
+        if (ph < phase || (ph == phase && j < i)) lo = at + 1u;
+        else if (at < hi) hi = at;
+    }
+    uint32_t to = (uint32_t)clamp((int32_t)i, (int32_t)lo, (int32_t)hi);
+    if (to < i) for (uint32_t j = i; j > to; j--) motion.event[j] = motion.event[j - 1u];
+    else for (uint32_t j = i; j < to; j++) motion.event[j] = motion.event[j + 1u];
+    e.place = (uint8_t)place;
+    e.value = (int8_t)phase;
+    motion.event[to] = e;
+    motion_fx_refresh(t);
+    motion_unguard(f);
+    return to;
+}
+/* Re-chase at the current playhead after a main-loop edit/undo. Choose the last
+ * edge per effect on the cyclic timeline, then restore recorded ON priority in
+ * time/press order and schedule the next edge in this step. This never changes
+ * notes, the transport, live hold/latch bits or the audio ISR's scan path. */
+static void motion_fx_refresh(track_t *t)
+{
+    uint32_t k = trk_index(t), f = motion_guard(), step, phase;
+    uint32_t live = perf_held | perf_latched;
+    uint32_t live_best = perf_pick(live | perf_motion[k]);
+    perf_motion[k] = 0;
+    motion_fx_next[k] = 256u;
+    if (!song.playing || t->seq_pos >= 0x7FFFFFFFu || k != motion_fx_track() ||
+        !((motion.on & motion.rsv[0]) & (1u << k))) { motion_unguard(f); return; }
+    motion_fx_position(t, &step, &phase);
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), cycle = len << 8, now = step << 8 | phase;
+    uint16_t age[PF_NFX];
+    uint8_t last[PF_NFX], order[PF_NFX];
+    memset(last, MOTION_MAX, sizeof last);
+    for (uint32_t i = 0; i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        if (!MOTION_IS_FX(e) || (e->place >> 6) != k || (e->place & 63u) >= len) continue;
+        uint32_t fx = MOTION_ID(e) - MOTION_FX_FIRST, at = (e->place & 63u) << 8 | (uint8_t)e->value;
+        uint32_t ago = (now + cycle - at) % cycle;
+        if (last[fx] == MOTION_MAX || ago <= age[fx]) { last[fx] = (uint8_t)i; age[fx] = (uint16_t)ago; }
+        if ((e->place & 63u) == step && (uint8_t)e->value > phase &&
+            (uint8_t)e->value < motion_fx_next[k]) motion_fx_next[k] = (uint8_t)e->value;
+    }
+    uint32_t n = 0;
+    for (uint32_t fx = 0; fx < PF_NFX; fx++) {
+        if (last[fx] == MOTION_MAX || (motion.event[last[fx]].param & MOTION_LOCK)) continue;
+        uint32_t p = n;
+        while (p && (age[order[p - 1u]] < age[fx] ||
+            (age[order[p - 1u]] == age[fx] && last[order[p - 1u]] > last[fx]))) {
+            order[p] = order[p - 1u]; p--;
+        }
+        order[p] = (uint8_t)fx; n++;
+    }
+    for (uint32_t p = 0; p < n; p++) {
+        uint32_t fx = order[p];
+        perf_motion[k] |= PF_BIT(fx);
+        if (!(live & PF_BIT(fx))) perf_ord[fx] = ++perf_seq;
+    }
+    /* A manual buffer effect that was on top stays on top when past recorded
+     * edges are re-chased; the edit itself is not a new live key press. */
+    if (live_best < PF_N && (live & PF_BIT(live_best))) perf_ord[live_best] = ++perf_seq;
+    motion_unguard(f);
 }
 /* A save while a key is still down takes its duration up to SAVE. The live
  * recording continues independently; snapshots never retain an orphan hold. */

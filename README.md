@@ -133,6 +133,9 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **DUP x2:** select a track, **hold SEQ and press F4** to duplicate its steps, locks, automation and FX and
   double LEN, up to **64 steps**. During playback the current loop finishes before the doubled pattern starts.
   SAVE held undoes/redoes the operation.
+- **Edit FX start and duration:** SEQ > AUTOMATION lists FX ON/OFF as independent events. KNOB 1 / PRESETS
+  selects one, **KNOB 2** moves its step and **KNOB 4** adjusts its fine position (0–255/256), leaving the other
+  event in place. Changes work during pattern playback; SAVE held undoes/redoes each gesture.
 
 Details: [live parts and recording](docs/LIVE_PATTERNS.md),
 [FX-special automation](docs/FX_SPECIAL_AUTOMATION.md), [DUP x2](docs/SEQUENCE_DUPLICATE.md).
@@ -463,7 +466,7 @@ For more details, see [On AI-Assisted Development and Responsibility](https://gi
   [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121),
   [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
   [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
-  (live part switching and saves, STEP REC during playback, FX-special recording,
+  (live part switching and saves, STEP REC during playback, FX-special recording and start/duration editing,
   global FX track, project INIT and DUP x2)
 
 ## Licence

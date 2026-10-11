@@ -754,6 +754,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_USER_FOOT, S_SLICES_BREAK, S_SLICES_USR, S_SLICES_NOFILE,
        S_ROLL_EMPTY, S_ROLL_ACID, S_ROLL_CHORDS, S_ROLL_TIES, S_ROLL_LEN32, S_ROLL_HIGH, S_ROLL_LOW, S_ROLL_WIDE, S_ROLL_PLAYING,
        S_ROLL_LOCKS, S_ROLL_LOCK_HELD, S_DRUM_LOCKS, S_DRUM_LOCK_HELD, S_MOTION_LOCKS, S_AUTO_LIST, S_AUTO_LIST_ADD, S_AUTO_LIST_DRUM,
+       S_AUTO_FX_ON, S_AUTO_FX_OFF,
        S_AUTO_NUDGE, S_AUTO_QNT, S_AUTO_ADD_NUDGE, S_ROLL_LEN, S_AUTO_VEL, S_AUTO_ADD_VEL, S_LFO2, S_REC_LAYER, S_REC_LAYER_SET, S_REC_LAYER_SONG,
        S_COUNTIN, S_COUNTIN2, S_MENU_AUDIO, S_HEAD_PLAY_REC, S_HEAD_REC_OTHER, S_HEAD_BPM_TURN, S_HEAD_BPM_LOCK,
        S_HEAD_BPM_LOCKED, S_HEAD_GLO_TURN, S_HEAD_DOWNBEAT, S_HEAD_BEAT_2,
@@ -781,6 +782,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "user_foot", "slices_break", "slices_usr", "slices_nofile",
     "roll_empty", "roll_acid", "roll_chords", "roll_ties", "roll_len32_p2", "roll_high", "roll_low", "roll_wide", "roll_playing",
     "roll_locks", "roll_lock_held", "drum_locks", "drum_lock_held", "motion_locks", "auto_list", "auto_list_add", "auto_list_drum",
+    "auto_fx_on", "auto_fx_off",
     "auto_nudge", "auto_quantize", "auto_add_nudge", "roll_len", "auto_vel", "auto_add_vel", "lfo2", "layer_rec", "layer_rec_set", "layer_rec_song",
     "countin", "countin_2bars", "menu_audio", "head_play_rec", "head_rec_other", "head_bpm_turn", "head_bpm_lock",
     "head_bpm_locked", "head_glo_turn", "head_downbeat", "head_beat_2",
@@ -1494,6 +1496,13 @@ static void setup(int s)
         motion_set_lock(TSEL, 11, P_LD_FLT, 50); motion_set_lock(TSEL, 13, P_DLY, 80); motion_set_lock(TSEL, 15, P_GLIDE, 60);
         go_page(GR_EVENTS); ui.ev_row = 5; ui.hot_col = 3; ui.hot_t = 30;   /* (row 0: PLAY, 1: QUANTIZE) */
         break;
+    case S_AUTO_FX_ON:
+    case S_AUTO_FX_OFF:
+        TSEL->p[P_SLEN] = 64;
+        motion_fx_put(TSEL, 62, PF_ETHR, 255, 1); motion_fx_put(TSEL, 63, PF_ETHR, 255, 0);
+        go_page(GR_EVENTS); ui.ev_row = s == S_AUTO_FX_ON ? 2 : 3;
+        ui.hot_col = 3; ui.hot_t = 30;
+        break;
     case S_AUTO_LIST_ADD: ui.cursor = 4; go_page(GR_EVENTS); break;
     case S_AUTO_LIST_DRUM: {
         uint32_t i;
@@ -1691,6 +1700,18 @@ static void sweep_columns(void)
         cur_name = name;
         draw(-1);
         lint();
+    }
+    {   /* All fourteen FX names, both edge cards, maximum step and unsigned phase. */
+        for (uint32_t fx = 0; fx < PF_NFX; fx++) {
+            state(); pal(UI_GREY_INDEX); TSEL->p[P_SLEN] = 64;
+            motion_fx_put(TSEL, 62, fx, 255, 1); motion_fx_put(TSEL, 63, fx, 255, 0);
+            go_page(GR_EVENTS);
+            cur_name = large_on ? "LARGE FX edge cards" : "FX edge cards";
+            for (uint32_t row = 2; row < 4; row++) {
+                ui.ev_row = (uint16_t)row; ui.hot_col = 3; ui.hot_t = 30;
+                draw(-1); lint(); nsweep++;
+            }
+        }
     }
     {   /* FM6's operator pages (ui_fm6op.c): every operator, stage and value of each byte KNOB 2..4 edit (COARSE in both
          * modes), then the page with its chart / envelope */

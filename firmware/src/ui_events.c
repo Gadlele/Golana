@@ -8,6 +8,7 @@
  *   QUANTIZE the second: the track's QUANTIZE (P_SQNT) ON / OFF (KNOB 4) and how many steps have a NUDGE. ON (the
  *            default) plays every step on its start; OFF plays the nudges (seq.c seq_tick)
  *   LOCK / AUTO  a record (motion.c): its step, its parameter, its value
+ *   FX ON / OFF  independent edges: KNOB 2 moves the step, KNOB 4 the phase (0..255/256); the other edge stays
  *   STEP     a step's CHANCE (not 100 %), RATCH (not x1) or NUDGE (not 0): the step's own fields (step_chance,
  *            step_ratchet, step_nudge), shown where they are not at their default, inside LEN; a row being edited
  *            stays while it is at its default. A NUDGE is dimmed where it does not play (QUANTIZE ON, a ratchet, no note)
@@ -32,6 +33,7 @@
  *          event holds its value until the next one, a lock sounds on its step only); on PLAY: CLEAR (the dialog)
  *   EDIT   deletes the record, puts a CHANCE / RATCH / NUDGE / VEL back to 100 % / x1 / 0 / 96;  OCT- goes HOME (as
  *          on the other action pages)
+ *          FX: deletes the complete effect lane; KNOB 3 and OCT+ keep effect identity and edge kind fixed
  * Every edit is one undo (SAVE held: ui.c motion_undo_take, step_undo_take; a knob turned on is one; PLAY and QUANTIZE
  * are settings, as on their pages before). Not while a song plays (STOP TO EDIT). The 128 records are shared by the four
  * tracks: AUTOMATION FULL when they are used */
@@ -373,7 +375,25 @@ static void ev_knob(uint32_t slot, int32_t s)
     }
     i = c & 0xFFu;
     e = &motion.event[i];
-    if (MOTION_IS_FX(e)) return; /* fine-timed edge pairs are read-only; EDIT deletes this effect lane */
+    if (MOTION_IS_FX(e)) {
+        uint32_t to_step = e->place & 63u, phase = (uint8_t)e->value;
+        if (slot == 1u) {
+            uint32_t top = ev_len(t) > to_step ? ev_len(t) : to_step + 1u;
+            to_step = (uint32_t)clamp((int32_t)to_step + s, 0, (int32_t)top - 1);
+        } else if (slot == 3u) {
+            phase = (uint32_t)clamp((int32_t)phase + accel(EN_K1 + slot, s, 255), 0, 255);
+        } else return; /* effect identity and ON/OFF kind stay fixed */
+        if (to_step == (e->place & 63u) && phase == (uint8_t)e->value) return;
+        uint32_t err = motion_fx_edit_ok(t, i, to_step, phase);
+        if (err) { ui_message(err == 2u ? "END FX REC FIRST" : "FX TIME OCCUPIED"); return; }
+        motion_undo_take(t, (1u << 16) | slot | i << 4);
+        i = motion_fx_move(t, i, to_step, phase);
+        if (i == MOTION_MAX) return;
+        undo_mot_tag = (1u << 16) | slot | i << 4;
+        motion_undo_done(t);
+        ev_follow(EVC(EVK_REC, i));
+        return;
+    }
     step = e->place & 63u;
     id = MOTION_ID(e);
     if (slot == 1u) {                                   /* the next step where its parameter is free */

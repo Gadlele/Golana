@@ -947,11 +947,12 @@ static void draw_columns(void)
         fmt_int(val, (int32_t)step + 1);
         draw_column(1, "STEP", val, "", k != EVK_ADD || step < (uint32_t)t->p[P_SLEN] ? VAL(1u) : T_DIM, -1, ICON_AUTO);
         if (k == EVK_REC && MOTION_IS_FX(&motion.event[c & 0xFFu])) {
+            static const char *const short_fx[PF_NFX] = {"RPT8", "RPT16", "RPT32", "REV", "LPF", "HPF",
+                "TAPE", "FREEZ", "OCT+", "OCT-", "FLANG", "PHAS", "RTHR", "ECHO"};
             const motion_event_t *e = &motion.event[c & 0xFFu];
-            ev_name(t, id, nm);
-            draw_column(2, "FX", nm, "", T_MID, -1, ICON_AUTO);
+            draw_column(2, "FX", short_fx[id - MOTION_FX_FIRST], "", T_MID, -1, ICON_AUTO);
             fmt_int(val, (uint8_t)e->value);
-            draw_column(3, (e->param & MOTION_LOCK) ? "OFF AT" : "ON AT", val, "/256", T_MID, -1, ICON_AUTO);
+            draw_column(3, (e->param & MOTION_LOCK) ? "OFF AT" : "ON AT", val, "/256", VAL(3u), -1, ICON_AUTO);
             return;
         }
         if (!ev_id_ok(t, id)) {

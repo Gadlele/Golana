@@ -234,6 +234,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "project formats (FUN1..FUN5 -> FUN6, the grid and song chain; DIGITAL tracks -> FM6, SAMPLE PERC -> DRUM)" "$OUT/project_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx_motion_test" tests/fx_motion_test.c -lm
     run "FX-special automation: fine-timed edges, latch, lifecycle, capacity and saved parts" "$OUT/fx_motion_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fx_edit_test" tests/fx_edit_test.c -lm
+    run "FX edge editing: independent step/phase, live chase, undo, loop and ordering" "$OUT/fx_edit_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/duplicate_test" tests/duplicate_test.c -lm
     run "DUP x2: step/motion copies, shared capacity, undo, live boundary and part launch" "$OUT/duplicate_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/motion_test" tests/motion_test.c -lm
@@ -407,7 +409,7 @@ else
     run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc
     $SCC -DOWN_PKG=1 -o "$A/ota_test" tests/ota_test.c
     run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/felucca.fwsc
-    for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test duplicate_test; do
+    for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test duplicate_test fx_edit_test; do
         $SCC -o "$A/$t" tests/$t.c -lm
         run "ASan/UBSan: $t" "$A/$t"
     done

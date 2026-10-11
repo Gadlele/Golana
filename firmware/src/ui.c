@@ -964,6 +964,7 @@ static void undo_swap(void)
         return;
     }
     undo.motion_backup = current_motion;
+    if (undo.what == UNDO_MOT) motion_fx_refresh(t);
     fm1_irq_off();                                /* the audio ISR must not see half a sound */
     if (undo.what & UNDO_SOUND) {
         uint8_t e = t->eng_req, pr = t->preset, u = t->user;

@@ -138,6 +138,22 @@ for (let i = 0; i < 400; i++) { fx.render(5); fxHeard ||= fx.ex.web_test_fx_repl
 check("FX special: next pass replays without FX button or live key", fxHeard && fx.ex.web_test_fx_live() === 0);
 fx.tap(B.PLAY);
 
+// ---- edit the captured FX edges through SEQ > AUTOMATION's real knobs
+const fxOn = fx.ex.web_test_fx_edge(1), fxOff = fx.ex.web_test_fx_edge(0);
+// Space page taps so the panel's double-tap shortcut does not lock SEQ TOOLS.
+for (let i = 0; i < 3; i++) { fx.tap(B.SEQ); fx.render(320); }
+fx.turn(EN.K1, 2); // first FX edge after PLAY / QUANTIZE
+fx.turn(EN.K2, 1);
+check("FX edit: KNOB2 moves ON one step and leaves OFF unchanged",
+      fx.ex.web_test_fx_edge(1) === fxOn + 256 && fx.ex.web_test_fx_edge(0) === fxOff);
+fx.turn(EN.K4, 1);
+check("FX edit: KNOB4 adjusts unsigned ON phase by 1/256",
+      fx.ex.web_test_fx_edge(1) === fxOn + 256 + ((fxOn & 255) < 255 ? 1 : 0));
+fx.turn(EN.K1, -1); // ON moved after the short take's OFF; select that OFF
+fx.turn(EN.K2, 2);
+check("FX edit: independent OFF move changes duration and retains both edges",
+      fx.ex.web_test_fx_edge(0) === fxOff + 512 && fx.ex.web_test_fx_events() === 2);
+
 // ---- a user preset saved from the panel, kept across a fresh instance
 const w0 = a.ex.web_flash_writes_count();
 a.tap(B.SAVE);
