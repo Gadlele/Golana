@@ -765,6 +765,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                     ui_rec_prefs = (uint8_t)lys.v[0];
                     rp_apply();
                 } else {
+                    seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
                     for (k = 0; k < 4u; k++)
                         t->p[P_SLEN + k] = lys.v[k];
                 }
@@ -1029,8 +1030,8 @@ static void layer_edit(void)                            /* the engines from F3, 
  * track the lanes of black keys 1..8 under them (the selected one: the selection's fill). A melodic track: the two
  * rows of the sequence's tools only */
 static const uint8_t TL_ICON[TL_N] = {ICON_CLEAR, ICON_X_REVERSE, ICON_X_LEFT, ICON_X_RIGHT, ICON_PROB, ICON_W_SH,
-    ICON_DRUM, 0, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB};
-static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", 0,
+    ICON_DRUM, ICON_STEPS, ICON_CLEAR, ICON_X_REVERSE, ICON_STEPS, ICON_PROB};
+static const char *const TL_NAME[TL_N] = {"CLEAR", "REVERSE", "SHIFT", "SHIFT", "RANDOM", "COOK", "BEAT", "DUP x2",
     "CLR", "REV", "FILL", "RND"};
 static void layer_seq(void)
 {

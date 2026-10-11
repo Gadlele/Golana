@@ -810,9 +810,23 @@ static void keyboard_block(void)
 }
 
 /* -------------------------------------------------------- sequencer --- */
+/* DUP x2 publishes the editable/savable pattern immediately, but the current
+ * pass finishes at its old end. No step/clock restart; only eight runtime bytes,
+ * never part of a saved project. A manual LEN edit cancels the temporary end. */
+static uint8_t seq_extend_end[NTRK], seq_extend_target[NTRK];
+static uint32_t seq_loop_len(const track_t *t)
+{
+    uint32_t k = trk_index(t), len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u;
+    if (!seq_extend_end[k]) return len;
+    if (seq_extend_target[k] != len)
+        seq_extend_end[k] = seq_extend_target[k] = 0;
+    return seq_extend_end[k] ? seq_extend_end[k] : len;
+}
 static void seq_start(void)
 {
     uint32_t i;
+    memset(seq_extend_end, 0, sizeof seq_extend_end);
+    memset(seq_extend_target, 0, sizeof seq_extend_target);
     motion_fx_close();
     motion_begin();
     chain_start();
@@ -849,6 +863,8 @@ static void seq_release(track_t *t)
 static void seq_stop(void)
 {
     uint32_t i;
+    memset(seq_extend_end, 0, sizeof seq_extend_end);
+    memset(seq_extend_target, 0, sizeof seq_extend_target);
     motion_fx_close();
     song.playing = 0;
     chain.live_pending = chain.live_applied = 0;
@@ -1097,8 +1113,7 @@ static void seq_tick(track_t *t, uint32_t n)
     if (!song.playing)
         return;
     period = div_samples((uint32_t)t->p[P_SDIV]);
-    len = (uint32_t)t->p[P_SLEN];
-    len = len ? len : 1u;
+    len = seq_loop_len(t);
     t->seq_pos += n;
     for (;;) {
         uint32_t cur_len = step_samples(t, period, t->seq_idx);
@@ -1110,6 +1125,10 @@ static void seq_tick(track_t *t, uint32_t n)
             motion_fx_tick(t, chain_motion(t), cur_len); /* include the old step's tail before wrapping */
         t->seq_pos = t->seq_pos >= 0x7FFFFFFFu ? ((chain.running | chain.live_applied) ? chain.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
+        if (!t->seq_idx && seq_extend_end[trk_index(t)]) {
+            seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
+            len = seq_loop_len(t);
+        }
         rec_hold(t, t->seq_idx, len);
         if (t->p[P_SQNT] && !t->nd_fired)
             seq_play(t, t->seq_idx, period);        /* QUANTIZE ON: every step on its start, as before 1.2 */
@@ -1217,7 +1236,7 @@ static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
     track_t *clock = &trk[0];
     uint32_t length, k, slot = chain.live_pending;
     if (!slot || !n || !song.playing || chain.running || chain.armed ||
-        clock->seq_pos >= 0x7FFFFFFFu || clock->seq_idx + 1u != (uint32_t)clock->p[P_SLEN]) return;
+        clock->seq_pos >= 0x7FFFFFFFu || clock->seq_idx + 1u != seq_loop_len(clock)) return;
     length = step_samples(clock, div_samples((uint32_t)clock->p[P_SDIV]), clock->seq_idx);
     if (clock->seq_pos + n < length) return;
     for (k = 0; k < NTRK; k++)
@@ -1233,6 +1252,7 @@ static __attribute__((noinline)) void project_pattern_tick(uint32_t n)
     step_record_mask = 0;
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];
+        seq_extend_end[k] = seq_extend_target[k] = 0;
         seq_release(t);                 /* releases old tied notes, including MIDI note-offs */
         memcpy(t->step, chain.source[0].step[k], sizeof t->step);
         memcpy(&t->p[P_SLEN], chain.source[0].timing[k], sizeof chain.source[0].timing[k]);

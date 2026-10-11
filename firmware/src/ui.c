@@ -804,6 +804,7 @@ static void pat_from_set(uint32_t slot)             /* every track's pattern is 
 static void load_motion_hold(track_t *t, uint32_t what)
 {
     if (what & UNDO_PAT) {
+        seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
         motion_reset(t);
         load_mo = 0;
         return;
@@ -981,6 +982,7 @@ static void undo_swap(void)
             }
     }
     if (undo.what & UNDO_PAT) {
+        seq_extend_end[trk_index(t)] = seq_extend_target[trk_index(t)] = 0;
         uint32_t ps = pat_sig[trk_index(t)];
         uint8_t pn = pat_last[trk_index(t)];
         pat_sig[trk_index(t)] = undo.pat;

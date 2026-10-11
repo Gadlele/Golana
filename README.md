@@ -130,9 +130,12 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **Project INIT without rebooting:** SAVE > PROJECT now offers **INIT** on KNOB 2; OCT+ opens confirmation
   and OCT+ again initializes. It restores boot sounds, empty sequences/automation and project defaults.
   Stored A–D, USER sounds, FM6 banks, MIDI-learn mappings and device preferences remain intact.
+- **DUP x2:** select a track, **hold SEQ and press F4** to duplicate its steps, locks, automation and FX and
+  double LEN, up to **64 steps**. During playback the current loop finishes before the doubled pattern starts.
+  SAVE held undoes/redoes the operation.
 
 Details: [live parts and recording](docs/LIVE_PATTERNS.md),
-[FX-special automation](docs/FX_SPECIAL_AUTOMATION.md).
+[FX-special automation](docs/FX_SPECIAL_AUTOMATION.md), [DUP x2](docs/SEQUENCE_DUPLICATE.md).
 
 ## New in 1.5.1
 
@@ -461,7 +464,7 @@ For more details, see [On AI-Assisted Development and Responsibility](https://gi
   [renebohne](https://github.com/renebohne) (MIDI Program Change, #179),
   [bonszaimusic](https://www.youtube.com/@bonszaimusic) / [fgunited](https://github.com/fgunited)
   (live part switching and saves, STEP REC during playback, FX-special recording,
-  global FX track and project INIT)
+  global FX track, project INIT and DUP x2)
 
 ## Licence
 
