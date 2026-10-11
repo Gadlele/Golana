@@ -82,6 +82,7 @@ static void reset(void)
     flash_ok = 1;
     erase_error = 0;
     fail_after = -1;
+    ui_prefs2 = 0;
     pb_ready = 0;
     pb_dirty = 0;
     pb_clear_all();
@@ -300,6 +301,120 @@ int main(void)
         (void)pb_request(0, 0);                                            /* back to the one playing: nothing waits */
         ok &= pb_target(0) == 0 && !pb_next[0];
         bad += check("SEQ SWITCH: NOW at once; END waits for the last step (or a wrap seen), stopped switches at once, same slot cancels", ok);
+    }
+
+    {   /* CHAIN: sequences start .. start + n - 1 play one after the other, the last back to the first */
+        uint32_t pass, pol;
+        reset();
+        song.playing = 1; trk[0].p[P_SLEN] = 16;
+        (void)pb_request(0, 1);                                    /* NOW: sequence 2 chosen: the chain's first */
+        ok = pb_start[0] == 1 && pb_run(0) == 1 && pb_chain_next(0) == -1;
+        ok &= pb_set_chain(0, 3) == 3 && pb_run(0) == 3 && pb_chain_next(0) == 2;
+        memset(pb_last, 0, sizeof pb_last);                        /* (the polls of an earlier test) */
+        for (i = 0; i < 4u; i++) { trk[0].seq_idx = i; for (t = 0; t < NTRK; t++) (void)pb_due(t); }
+        ok &= pb_cur[0] == 1;                                      /* mid pass: nothing */
+        {
+            static const uint8_t want[] = {2, 3, 1, 2, 3, 1};     /* the end of each pass: the next, the last back to the first */
+            for (pass = 0; pass < 6u; pass++) {
+                for (pol = 0; pol < 5u; pol++) {                   /* many polls on the last step: one switch */
+                    trk[0].seq_idx = 15;
+                    (void)pb_due(0);
+                }
+                ok &= pb_cur[0] == want[pass];
+                trk[0].seq_idx = 0; (void)pb_due(0);               /* the next pass under way */
+                trk[0].seq_idx = 7; (void)pb_due(0);
+            }
+        }
+        ok &= pb_start[0] == 1 && pb_set_chain(0, 8) == 7;        /* from the second: 7 at most */
+        (void)pb_request(0, 6);                                    /* chosen: 7th, a chain of 2 left (7th, 8th) */
+        ok &= pb_start[0] == 6 && pb_run(0) == 2 && pb_set_chain(0, 8) == 2;
+        trk[0].seq_idx = 15; (void)pb_due(0);
+        ok &= pb_cur[0] == 7;
+        trk[0].seq_idx = 3; (void)pb_due(0); trk[0].seq_idx = 15; (void)pb_due(0);
+        ok &= pb_cur[0] == 6;
+        (void)pb_set_chain(0, 1);                                  /* 1: off */
+        trk[0].seq_idx = 3; (void)pb_due(0); trk[0].seq_idx = 15; (void)pb_due(0);
+        ok &= pb_cur[0] == 6 && pb_run(0) == 1 && !pb_chain[0];
+        song.playing = 0;                                          /* stopped: a chain does not advance */
+        (void)pb_set_chain(0, 2); trk[0].seq_idx = 15; (void)pb_due(0);
+        ok &= pb_cur[0] == 6;
+        bad += check("CHAIN: the sequences play one after the other, once a pass, the last back to the first; a chosen one starts it", ok);
+        /* a waiting switch (SEQ SWITCH END) wins over the chain's next, and starts a new chain */
+        reset();
+        menu_put(MI_SEQSW, 1); song.playing = 1; trk[0].p[P_SLEN] = 16;
+        (void)pb_set_chain(0, 3); (void)pb_request(0, 5);          /* waits for sequence 6 */
+        trk[0].seq_idx = 15; (void)pb_due(0);
+        ok = pb_cur[0] == 5 && pb_start[0] == 5 && pb_run(0) == 3 && pb_chain_next(0) == 6;
+        menu_put(MI_SEQSW, 0);
+        bad += check("CHAIN: a waiting switch goes first and its sequence starts the chain", ok);
+        /* the chain is saved with the project and with the live music */
+        reset();
+        (void)pb_request(0, 2); (void)pb_set_chain(0, 4); (void)pb_request(2, 5); (void)pb_set_chain(2, 3);
+        ok = project_save_as(0, "CH") == 0;
+        memset(trk, 0, sizeof trk); memset(&motion, 0, sizeof motion); memset(motion_active, 0, sizeof motion_active);
+        host_tracks_init(); pb_ready = 0; pb_clear_all(); memset(proj_slot, 0, sizeof proj_slot);
+        ok &= pb_run(0) == 1;
+        project_load(0);
+        ok &= pb_start[0] == 2 && pb_run(0) == 4 && pb_cur[0] == 2 && pb_start[2] == 5 && pb_run(2) == 3 && pb_run(1) == 1;
+        (void)pb_request(1, 3); (void)pb_set_chain(1, 2);
+        as_run(120000u);
+        power_cycle();
+        ok &= pb_start[1] == 3 && pb_run(1) == 2 && pb_start[0] == 2 && pb_run(0) == 4;
+        bad += check("CHAIN: kept by project SAVE / LOAD and by the autosave (the live store)", ok);
+    }
+
+    {   /* SONG: a lane can play any of its project's sequences (CH_SEQ), from the project's store */
+        reset();
+        note(0, 0, 40);
+        (void)pb_select(0, 2); note(0, 1, 42); trk[0].p[P_SLEN] = 8; (void)motion_set_event(&trk[0], 4, P_ATK, 9);
+        (void)pb_select(0, 5); note(0, 2, 45);                      /* the project is saved on sequence 6 */
+        ok = project_save_as(0, "A") == 0 && project_used(0);
+        chain_defaults(&chain_config);
+        for (i = 0; i < 4u; i++) {
+            static const uint8_t pick[4] = {0, 1, 3, 6};            /* (as saved, the 1st, the 3rd, the 6th: the one saved on) */
+            for (t = 0; t < NTRK; t++) chain_config.row[i].slot[t] = CH_MAKE(t ? CHAIN_SILENT : 0u, 0u);
+            chain_config.row[i].slot[0] = CH_MAKE(0u, pick[i]);
+            chain_config.row[i].repeat = 1;
+        }
+        chain_config.count = 4;
+        ok &= chain_valid(&chain_config) && chain_prepare() == 0;
+        ok &= chain.src[0][0] == 0 && chain.src[1][0] == 8 && chain.src[2][0] == 9 && chain.src[3][0] == 0 && chain.src[0][1] == CHAIN_SILENT;
+        chain.running = 1;
+        chain.row = 0; chain_apply();
+        ok &= chain.lane[0] == 0 && chain.alt[0] == CHAIN_NOALT && seq_steps(&trk[0]) == chain.source[0].step[0];
+        ok &= seq_steps(&trk[0])[2].n == 1 && seq_steps(&trk[0])[2].note[0] == 45;           /* as saved: the 6th (the record's) */
+        chain.row = 1; chain_apply();
+        ok &= chain.lane[0] == 0 && chain.alt[0] == 0 && seq_steps(&trk[0]) == chain_alt[0].step &&
+              seq_steps(&trk[0])[0].n == 1 && seq_steps(&trk[0])[0].note[0] == 40 && seq_steps(&trk[0])[2].n == 0;
+        chain.row = 2; chain_apply();
+        ok &= chain.alt[0] == 1 && seq_steps(&trk[0])[1].note[0] == 42 && trk[0].p[P_SLEN] == 8 &&
+              chain_motion(&trk[0]) == &chain_alt[1].motion && chain_alt[1].motion.count == 1;
+        chain.row = 3; chain_apply();
+        ok &= chain.alt[0] == CHAIN_NOALT && seq_steps(&trk[0])[2].note[0] == 45;            /* the saved one is the slot's */
+        chain.running = 0; chain.armed = 0; transport_req = 0;
+        bad += check("SONG: a lane's chosen sequence is read from its project's store; the saved one is the slot's own", ok);
+        /* the live sequences are untouched by all that */
+        ok = pb_cur[0] == 5 && has(0, 2, 45);
+        bad += check("SONG: the playing sequences and their steps stay as they were", ok);
+        /* more sequences than the song holds */
+        for (i = 0; i < 8u; i++) chain_config.row[i].slot[0] = CH_MAKE(0u, (i % 8u) + 1u);
+        chain_config.count = 8;
+        ok = chain_prepare() == 16u;
+        for (i = 0; i < 7u; i++) chain_config.row[i].slot[0] = CH_MAKE(0u, i < 5u ? i + 1u : 0u);
+        chain_config.count = 7;
+        ok &= chain_prepare() == 0 && !chain.running;
+        chain.armed = 0; transport_req = 0;
+        chain_config.row[0].slot[0] = CH_MAKE(0u, 9u);                                      /* a sequence past the 8th: no song */
+        ok &= !chain_valid(&chain_config);
+        bad += check("SONG: more than CHAIN_ALT chosen sequences: TOO MANY (16); one past the 8th: not a song", ok);
+        /* a project saved without the store (or with it lost): the chosen sequence is empty, the song still plays */
+        for (q = 0; q < 2u; q++)
+            memset(nor + OBJ_PB_BASE + PB_META_O * 2u * ST_SECTOR + q * ST_SECTOR, 0, ST_SECTOR);
+        chain_config.row[0].slot[0] = CH_MAKE(0u, 2u);
+        chain_config.count = 1;
+        ok = chain_prepare() == 0 && chain.src[0][0] == 8 && chain_alt[0].step[0].n == 0 && chain_alt[0].timing[0] == TP[P_SLEN].def;
+        chain.armed = 0; transport_req = 0;
+        bad += check("SONG: a lost store: the chosen sequence is empty, the song plays", ok);
     }
 
     printf(bad ? "patbank test FAILED\n" : "patbank test passed\n");

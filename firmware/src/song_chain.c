@@ -21,6 +21,16 @@ typedef struct {
     motion_store_t motion;
 } chain_pattern_t;
 static chain_config_t chain_config;
+#define CHAIN_ALT 6u                         /* 1.6: sequences chosen on lanes (other than the one a project was saved on): sources of
+                                              * their own, one per (project, track, sequence) the song uses */
+#define CHAIN_NOALT 0xFFu
+typedef struct {
+    step_t step[NSTEP];
+    int16_t timing[4];                       /* LEN (the sequence's) DIV SWING GATE (the project's) */
+    uint8_t qnt;
+    motion_store_t motion;                   /* the sequence's automation: the track's events only */
+} chain_alt_t;
+static chain_alt_t chain_alt[CHAIN_ALT] __attribute__((section(".pool")));
 static struct {
     chain_pattern_t source[4];
     chain_config_t config;
@@ -28,6 +38,8 @@ static struct {
     uint8_t qnt[NTRK];
     volatile uint8_t armed, running, row, remaining;
     uint8_t lane[NTRK];                      /* the slot each track plays in this section, CHAIN_SILENT none */
+    uint8_t alt[NTRK];                       /* 1.6: its source in chain_alt when the lane chose a sequence, CHAIN_NOALT: the slot's */
+    uint8_t src[CHAIN_ROWS][NTRK];           /* each section's lanes' sources (chain_prepare): a slot 0..3, CHAIN_SILENT, 8 + chain_alt's */
     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
     uint8_t rec;
     uint32_t carry;
@@ -64,7 +76,7 @@ static int chain_valid(const chain_config_t *c)
         return 0;
     for (i = 0; i < c->count; i++) {
         for (k = 0; k < NTRK; k++)
-            if (c->row[i].slot[k] > CHAIN_SILENT)
+            if (CH_SLOT(c->row[i].slot[k]) > CHAIN_SILENT || CH_SEQ(c->row[i].slot[k]) > 8u)
                 return 0;
         if (!c->row[i].repeat || c->row[i].repeat > 16u)
             return 0;
@@ -92,7 +104,7 @@ static uint32_t chain_clock(const chain_row_t *r)
 {
     uint32_t k;
     for (k = 0; k < NTRK; k++)
-        if (r->slot[k] < CHAIN_SILENT)
+        if (CH_SLOT(r->slot[k]) < CHAIN_SILENT)
             return k;
     return 0;
 }
@@ -104,6 +116,8 @@ static const step_t *seq_steps(const track_t *t)
     if (!chain.running)
         return t->step;
     s = chain.lane[k];
+    if (s < 4u && chain.alt[k] != CHAIN_NOALT)
+        return chain_alt[chain.alt[k]].step;
     return s < 4u ? chain.source[s].step[k] : chain_silent;
 }
 static void motion_restore(track_t *t);
@@ -115,13 +129,15 @@ static __attribute__((noinline)) void chain_apply(void)
     chain.clk = (uint8_t)chain_clock(r);
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
-        uint32_t s = r->slot[i];
+        uint32_t s = CH_SLOT(r->slot[i]), a = chain.src[chain.row][i];
         chain.lane[i] = (uint8_t)(s < 4u ? s : CHAIN_SILENT);
+        chain.alt[i] = (uint8_t)(s < 4u && a >= 8u && a - 8u < CHAIN_ALT ? a - 8u : CHAIN_NOALT);
         seq_release(t);
         motion_restore(t);
         if (s < 4u) {
-            memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
-            t->p[P_SQNT] = chain.source[s].qnt[i];
+            memcpy(&t->p[P_SLEN], chain.alt[i] != CHAIN_NOALT ? chain_alt[chain.alt[i]].timing : chain.source[s].timing[i],
+                   sizeof chain.timing[i]);
+            t->p[P_SQNT] = chain.alt[i] != CHAIN_NOALT ? chain_alt[chain.alt[i]].qnt : chain.source[s].qnt[i];
         } else {
             t->p[P_SLEN] = CHAIN_SIL_LEN;
             t->p[P_SDIV] = CHAIN_SIL_DIV;

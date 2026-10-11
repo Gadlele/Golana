@@ -1121,18 +1121,47 @@ static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj
 static uint32_t chain_prepare(void)
 {
     uint32_t i, k, j, used = 0;
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+    uint32_t na = 0, saved_ok = 0;
+    uint8_t alt_s[CHAIN_ALT], alt_k[CHAIN_ALT], alt_q[CHAIN_ALT], saved[4][NTRK];
+#endif
     if (transport_busy())
         return 2;
     if (!chain_valid(&chain_config) || !chain_config.count)
         return 1;
     for (i = 0; i < chain_config.count; i++)            /* the slots the lanes play (not the silent ones) */
         for (k = 0; k < NTRK; k++) {
-            uint32_t s = chain_config.row[i].slot[k];
-            if (s >= 4u || ((used >> s) & 1u))
+            uint32_t s = CH_SLOT(chain_config.row[i].slot[k]);
+            chain.src[i][k] = CHAIN_SILENT;
+            if (s >= 4u)
                 continue;
-            if (!project_used(s))
-                return 3u + s;
-            used |= 1u << s;
+            if (!((used >> s) & 1u)) {
+                if (!project_used(s))
+                    return 3u + s;
+                used |= 1u << s;
+            }
+            chain.src[i][k] = (uint8_t)s;
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+            if (CH_SEQ(chain_config.row[i].slot[k]) && flash_ok) {   /* 1.6: a sequence chosen: the one the project was saved on is the slot's */
+                uint32_t q = CH_SEQ(chain_config.row[i].slot[k]) - 1u, a;
+                if (!((saved_ok >> s) & 1u)) {
+                    (void)pb_store_saved(s, saved[s]);
+                    saved_ok |= 1u << s;
+                }
+                if (q == saved[s][k])
+                    continue;
+                for (a = 0; a < na; a++)
+                    if (alt_s[a] == s && alt_k[a] == k && alt_q[a] == q)
+                        break;
+                if (a == na) {
+                    if (na >= CHAIN_ALT)
+                        return 16u;                         /* more sequences chosen than the song can hold */
+                    alt_s[na] = (uint8_t)s; alt_k[na] = (uint8_t)k; alt_q[na] = (uint8_t)q;
+                    na++;
+                }
+                chain.src[i][k] = (uint8_t)(8u + a);
+            }
+#endif
         }
     chain.config = chain_config;
     for (i = 0; i < 4u; i++)
@@ -1159,6 +1188,30 @@ static uint32_t chain_prepare(void)
                     chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
                         TP[P_SLEN + j].min, TP[P_SLEN + j].max);
             }
+#if FELUCCA_PATBANK && FELUCCA_FLASH
+            for (j = 0; j < na; j++)                    /* the chosen sequences of this slot: their own sources */
+                if (alt_s[j] == i) {
+                    chain_alt_t *al = &chain_alt[j];
+                    pb_mo_t pm;
+                    uint8_t len;
+                    uint32_t e, n = 0;
+                    k = alt_k[j];
+                    (void)pb_store_fetch(i, k, alt_q[j], al->step, &len, &pm);
+                    proj_steps(al->step);
+                    memcpy(al->timing, chain.source[i].timing[k], sizeof al->timing);
+                    al->timing[0] = (int16_t)clamp((int32_t)len, TP[P_SLEN].min, TP[P_SLEN].max);
+                    al->qnt = chain.source[i].qnt[k];
+                    memset(&al->motion, 0, sizeof al->motion);
+                    for (e = 0; e < pm.count && e < PB_MO_MAX; e++) {
+                        const motion_event_t *v = &pm.ev[e];
+                        if ((uint32_t)(v->place >> 6) != k || (MOTION_ID(v) >= P_FM1_ATK && p->t[k].engine != trk[k].eng_req))
+                            continue;
+                        al->motion.event[n++] = *v;
+                    }
+                    al->motion.count = (uint8_t)n;
+                    al->motion.on = pm.on ? (uint8_t)(1u << k) : 0u;
+                }
+#endif
         }
     RING_PUBLISH();
     chain.armed = 1;

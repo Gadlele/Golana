@@ -1,19 +1,21 @@
-From 45c8475f4c5455461c214a72c4052c43660df13f Mon Sep 17 00:00:00 2001
+From 044cf1f29fcbd20d1bf3a160238110639d205aa9 Mon Sep 17 00:00:00 2001
 From: Felucca dev <dev@example.invalid>
 Date: Sat, 10 Oct 2026 14:53:08 +0000
-Subject: [PATCH] Eight sequences per track (FELUCCA_PATBANK), with MENU >
- CONTROL > SEQ SWITCH
+Subject: [PATCH] Eight sequences per track (FELUCCA_PATBANK): SEQ SWITCH,
+ CHAIN, song sequences
 
 Each track plays one of eight sequences (own steps, LEN, 64 automation records).
-SEQ > SEQUENCE (fourth SEQ page); SEQ held + C5..G5; MENU > CONTROL > SEQ SWITCH
-NOW / END (the knob steps from the sequence that waits). Project SAVE/LOAD and
-the autosave keep them in the flash the user sample slots had (builds without
-FELUCCA_PATBANK keep USR1..3). Version string v1.5.1_sequences. Based on 1.5.1.
+SEQ > SEQUENCE (fourth SEQ page; KNOB 1..4 pick, PRESETS = CHAIN length); SEQ held
++ C5..G5; MENU > CONTROL > SEQ SWITCH NOW / END. A chain plays sequences one after
+the other. SONG: PRESETS picks the sequence a cell plays (CH_SEQ in the lane byte,
+read from the project's store at PLAY; up to six chosen). Project SAVE/LOAD and the
+autosave keep the banks in the flash the user sample slots had. Version
+v1.5.1_sequences. Based on 1.5.1.
 ---
  BUILDING.md                  |   1 +
- README.md                    |  18 +-
- firmware/src/core.h          |   8 +
- firmware/src/editor.c        |   6 +-
+ README.md                    |  24 +-
+ firmware/src/core.h          |  14 ++
+ firmware/src/editor.c        |  10 +-
  firmware/src/editor_backup.c |   3 +-
  firmware/src/editor_menu.c   |   1 +
  firmware/src/eng_sample.c    |   3 +-
@@ -22,29 +24,31 @@ FELUCCA_PATBANK keep USR1..3). Version string v1.5.1_sequences. Based on 1.5.1.
  firmware/src/main.c          |   1 +
  firmware/src/menu_items.c    |   8 +-
  firmware/src/params.c        |   5 +-
- firmware/src/patbank.c       | 258 +++++++++++++++++++++++++++++
- firmware/src/patbank_store.c | 140 ++++++++++++++++
- firmware/src/project.c       |  29 ++++
- firmware/src/storage.c       |  24 ++-
- firmware/src/ui.c            |   9 +-
- firmware/src/ui_draw.c       |  12 ++
- firmware/src/ui_graph.c      |  41 +++++
- firmware/src/ui_help.c       |   1 +
- firmware/src/ui_input.c      |  16 +-
- firmware/src/ui_layer.c      |  78 ++++++++-
+ firmware/src/patbank.c       | 318 ++++++++++++++++++++++++++
+ firmware/src/patbank_store.c | 202 +++++++++++++++++
+ firmware/src/project.c       |  92 +++++++-
+ firmware/src/seq.c           |   2 +
+ firmware/src/song_chain.c    |  26 ++-
+ firmware/src/storage.c       |  24 +-
+ firmware/src/ui.c            |  12 +-
+ firmware/src/ui_draw.c       |  21 +-
+ firmware/src/ui_graph.c      |  62 ++++-
+ firmware/src/ui_help.c       |   3 +-
+ firmware/src/ui_input.c      |  70 +++++-
+ firmware/src/ui_layer.c      |  95 +++++++-
  firmware/src/ui_tools.c      |   4 +-
  tests/backup_test.c          |   1 +
  tests/detail_test.c          |   8 +-
- tests/editor_test.c          |  29 ++--
+ tests/editor_test.c          |  29 +--
  tests/fm6bank_test.c         |   1 +
- tests/patbank_test.c         | 307 +++++++++++++++++++++++++++++++++++
+ tests/patbank_test.c         | 422 +++++++++++++++++++++++++++++++++++
  tests/persistence_test.c     |   1 +
  tests/run_tests.sh           |  18 +-
- tests/ui_render.c            |  24 ++-
- tests/ui_test.c              |  56 +++++--
+ tests/ui_render.c            |  35 ++-
+ tests/ui_test.c              |  97 +++++++-
  tools/build.py               |   2 +-
  web/emu/felucca_web.c        |   1 +
- 34 files changed, 1056 insertions(+), 62 deletions(-)
+ 36 files changed, 1531 insertions(+), 89 deletions(-)
  create mode 100644 firmware/src/patbank.c
  create mode 100644 firmware/src/patbank_store.c
  create mode 100644 tests/patbank_test.c
@@ -62,7 +66,7 @@ index ff8ee1a..62358d2 100644
  | `FELUCCA_FM4` | 0 | the retired DIGITAL engine (4-operator FM) instead of its FM6 conversion |
  
 diff --git a/README.md b/README.md
-index 6dee38c..5221ff5 100644
+index 6dee38c..718c222 100644
 --- a/README.md
 +++ b/README.md
 @@ -319,7 +319,7 @@ In the order the device lists them:
@@ -74,7 +78,7 @@ index 6dee38c..5221ff5 100644
  - **VOICE**: formant oscillator, sung vowels
  - **TRIO**: 3 oscillators with ring modulation and sync, multimode filter
  - **WHEEL**: tonewheel-style organ; drawbar registrations, percussion, key click, drive, rotary speaker
-@@ -445,3 +445,19 @@ ported DSP keep their own licences ([LICENSES/](LICENSES/)); details in [LICENSI
+@@ -445,3 +445,25 @@ ported DSP keep their own licences ([LICENSES/](LICENSES/)); details in [LICENSI
  M-VAVE and FM-1 are trademarks of their respective owners. Felucca is not affiliated with or endorsed by them.
  
  Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
@@ -91,11 +95,17 @@ index 6dee38c..5221ff5 100644
 +  plays, waits for the last step of the sequence playing, so the new one starts from its first step (the waiting one shows
 +  on the SEQUENCE page, its key blinks, and "T1 NEXT 3" says it; choosing the one playing calls it off). Stopped, a switch
 +  is always at once. Not while a song plays.
++- **CHAIN** (SEQ > SEQUENCE, PRESETS): how many sequences, starting from the selected track's (the one you chose last), play one
++  after the other, the last one back to the first (1: off). A chain of 4 is a 256-step run. It advances on the last step of each
++  pass while the music plays; the chained cells show a bar at their left, the card "x4". Choosing a sequence starts a chain from it.
++- **SONG**: PRESETS turns the sequence the selected cell plays: 0 (as saved: the one the project was saved on, as every song
++  before) or 1..8 of that project's track. The PAT card says "S3" and the line under the grid "NAME SEQ 3". A song holds up to
++  six such chosen sequences ("TOO MANY SEQ" at PLAY otherwise). Older firmware reads a song with a sequence chosen as no song.
 +- SAVE keeps all of a project's sequences (the record holds the one playing, so an older firmware still opens it); RESTORE LAST
 +  keeps the music's. They live in the flash the user sample slots had, which these builds do not have.
 +- A song plays each project's sequence as it was saved.
 diff --git a/firmware/src/core.h b/firmware/src/core.h
-index 6598fa9..f15287e 100644
+index 6598fa9..df70b6c 100644
 --- a/firmware/src/core.h
 +++ b/firmware/src/core.h
 @@ -16,6 +16,14 @@
@@ -113,8 +123,21 @@ index 6598fa9..f15287e 100644
  #ifndef FELUCCA_FM4
  #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built
                                    * by default; replaced by FM6, its sounds convert (fm4_convert.c) */
+@@ -288,6 +296,12 @@ _Static_assert(sizeof(motion_store_t) == 388u, "motion disk layout (FUN10)");
+  * (chain_v9_t, FUN6..FUN9): it loads as a section with the four on it (song_chain.c chain_from_v9) */
+ #define CHAIN_SILENT 4u
+ typedef struct { uint8_t slot[NTRK], repeat; } chain_row_t;
++/* 1.6: a lane's byte is its project slot (0..3, CHAIN_SILENT: the low three bits) and its sequence (patbank.c): 0 the one the
++ * project was saved on (every song before this), 1..8 that sequence of the project's tracks. Older firmware reads a song
++ * with a sequence chosen as no song (chain_valid) */
++#define CH_SLOT(b) ((uint32_t)(b) & 7u)
++#define CH_SEQ(b) ((uint32_t)(b) >> 3)
++#define CH_MAKE(slot, seq) ((uint8_t)((uint32_t)(slot) | (uint32_t)(seq) << 3))
+ typedef struct {
+     uint8_t count, rsv[3];
+     chain_row_t row[CHAIN_ROWS];
 diff --git a/firmware/src/editor.c b/firmware/src/editor.c
-index 57317b7..d98526a 100644
+index 57317b7..67a1071 100644
 --- a/firmware/src/editor.c
 +++ b/firmware/src/editor.c
 @@ -596,7 +596,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
@@ -144,6 +167,18 @@ index 57317b7..d98526a 100644
          break;
      case ED_SMP_INFO:                                      /* -> per slot: zones (0 = empty), name, data KiB */
          ed_b(SMP_USER_SLOTS);
+@@ -883,9 +883,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
+         for (i = 0; i < chain_config.count; i++) {
+             const chain_row_t *r = &chain_config.row[i];
+             if (lanes)
+-                for (k = 0; k < NTRK; k++) ed_b(r->slot[k]);
++                for (k = 0; k < NTRK; k++) ed_b(CH_SLOT(r->slot[k]));      /* (1.6: the sequences chosen stay on the device) */
+             else                                         /* v6: the clock track's slot (every track "-": A) */
+-                ed_b(r->slot[chain_clock(r)] < 4u ? r->slot[chain_clock(r)] : 0u);
++                ed_b(CH_SLOT(r->slot[chain_clock(r)]) < 4u ? CH_SLOT(r->slot[chain_clock(r)]) : 0u);
+             ed_b(r->repeat);
+         }
+         break;
 diff --git a/firmware/src/editor_backup.c b/firmware/src/editor_backup.c
 index 05ea369..a4c6cd9 100644
 --- a/firmware/src/editor_backup.c
@@ -297,10 +332,10 @@ index dcca6af..d1c9cbf 100644
      {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},
 diff --git a/firmware/src/patbank.c b/firmware/src/patbank.c
 new file mode 100644
-index 0000000..e1a3d0a
+index 0000000..3ed263e
 --- /dev/null
 +++ b/firmware/src/patbank.c
-@@ -0,0 +1,258 @@
+@@ -0,0 +1,318 @@
 +/* SPDX-License-Identifier: GPL-3.0-only
 + * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 +/* Sequences: eight per track (FELUCCA_PATBANK). A track plays one of them at a time: trk[].step is the one playing, the
@@ -333,7 +368,11 @@ index 0000000..e1a3d0a
 +static uint8_t pb_pat[PB_NSEQ][PB_PAT_B] __attribute__((section(".pool")));
 +static pb_mo_t pb_mo[PB_NSEQ] __attribute__((section(".pool")));   /* (the playing sequence's: motion) */
 +static uint8_t pb_next[NTRK];            /* a switch waiting for the end of the sequence playing: the slot + 1, 0 none (SEQ SWITCH END) */
-+static uint8_t pb_last[NTRK];            /* the step each track was on when pb_poll last looked */
++static uint8_t pb_last[NTRK];            /* the step each track was on when pb_due last looked */
++static uint8_t pb_fired[NTRK];           /* a switch happened on this pass's last step: not again until the pass is under way */
++static uint8_t pb_start[NTRK];           /* CHAIN: the sequence a track's chain starts from (the one last chosen) */
++static uint8_t pb_chain[NTRK];           /* CHAIN: how many sequences, from pb_start, play one after the other (0, 1: none) */
++static uint8_t pb_keep;                  /* pb_select called by the chain: pb_start stays */
 +static uint8_t pb_ready;
 +static uint8_t pb_dirty;                 /* bit o: the live store's object o is older than the mirror */
 +static uint32_t pb_gen;                  /* + 1 per change (autosave_sig) */
@@ -403,6 +442,10 @@ index 0000000..e1a3d0a
 +    memset(pb_mo, 0, sizeof pb_mo);
 +    memset(pb_cur, 0, sizeof pb_cur);
 +    memset(pb_next, 0, sizeof pb_next);
++    memset(pb_start, 0, sizeof pb_start);
++    memset(pb_chain, 0, sizeof pb_chain);
++    memset(pb_fired, 0, sizeof pb_fired);
++    memset(pb_last, 0, sizeof pb_last);
 +    for (q = 0; q < PB_NSEQ; q++)
 +        pb_len[q] = (uint8_t)TP[P_SLEN].def;
 +    pb_ready = 1;
@@ -495,9 +538,43 @@ index 0000000..e1a3d0a
 +    motion_unguard(f);
 +    pb_cur[t] = (uint8_t)slot;
 +    pb_next[t] = 0;
++    if (!pb_keep)
++        pb_start[t] = (uint8_t)slot;              /* (a sequence chosen starts a chain from it) */
 +    pb_dirty |= (uint8_t)(1u << (q / PB_PER) | 1u << (old / PB_PER) | 1u << PB_META_O);
 +    pb_gen++;
 +    return 0;
++}
++
++/* CHAIN: a track's sequences pb_start .. pb_start + n - 1 play one after the other (the last one back to the first), a
++ * sequence at the end of each pass of the one playing; n 0 or 1: no chain. The sequence last chosen is the first. A chain is
++ * whole sequences of 1..64 steps each: 8 x 64 steps at most */
++static uint32_t pb_run(uint32_t t)
++{
++    uint32_t n = pb_chain[t % NTRK] ? pb_chain[t % NTRK] : 1u, a = pb_start[t % NTRK];
++    return a + n > PB_N ? PB_N - a : n;
++}
++static uint32_t pb_set_chain(uint32_t t, uint32_t n)   /* the length it got (1: off) */
++{
++    uint32_t a;
++    t %= NTRK;
++    pb_need();
++    a = pb_start[t];
++    n = n < 1u ? 1u : n > PB_N - a ? PB_N - a : n;
++    if (n != pb_run(t) || pb_chain[t] != (uint8_t)n) {
++        pb_chain[t] = (uint8_t)(n > 1u ? n : 0u);
++        pb_dirty |= 1u << PB_META_O;
++        pb_gen++;
++    }
++    return n;
++}
++static int pb_chain_next(uint32_t t)                   /* the sequence after the one playing; -1 no chain */
++{
++    uint32_t n = pb_run(t), a = pb_start[t], c = pb_cur[t];
++    if (n < 2u)
++        return -1;
++    if (c < a || c >= a + n)
++        return (int)a;
++    return (int)(c + 1u < a + n ? c + 1u : a);
 +}
 +
 +/* the sequence a knob step starts from: the one waiting (SEQ SWITCH END) if there is one, else the one playing. Stepping from
@@ -527,21 +604,39 @@ index 0000000..e1a3d0a
 +    rc = pb_select(t, s);
 +    return rc ? -rc : 0;
 +}
-+/* main loop, every pass, per track: its waiting switch happens on the last step of the sequence playing (the next step is
-+ * the new one's first), at once when the music is stopped, and late (a wrap seen) when a pass missed the last step.
-+ * 1 switched, 0 nothing (yet), < 0 pb_select's rc, negated (the switch is dropped) */
++/* main loop, every pass, per track: at the end of the sequence playing, a waiting switch (SEQ SWITCH END) or else the next
++ * sequence of the chain happens: on the last step (the next step is the new one's first), at once for a waiting one when
++ * the music is stopped, and late (a wrap seen) when a pass missed the last step. 1 switched, 0 nothing (yet), < 0
++ * pb_select's rc, negated (the switch is dropped) */
 +static int pb_due(uint32_t t)
 +{
 +    const track_t *tr = &trk[t];
-+    uint32_t idx = tr->seq_idx, run = song.playing && tr->seq_pos < 0x7FFFFFFFu, last = pb_last[t];
-+    int rc;
++    uint32_t idx = tr->seq_idx, run = song.playing && tr->seq_pos < 0x7FFFFFFFu, last = pb_last[t], at_end;
++    int rc, nx;
 +    pb_last[t] = (uint8_t)idx;
-+    if (!pb_next[t])
++    if (!run)
++        pb_fired[t] = 0;                                /* (stopped: the next start is a new pass) */
++    if (pb_fired[t]) {                                  /* this boundary was handled: wait for the pass to be under way */
++        if (idx + 1u < (uint32_t)tr->p[P_SLEN])
++            pb_fired[t] = 0;
 +        return 0;
-+    if (run && idx + 1u < (uint32_t)tr->p[P_SLEN] && idx >= last)
++    }
++    at_end = run && (idx + 1u >= (uint32_t)tr->p[P_SLEN] || idx < last);
++    if (pb_next[t]) {
++        if (run && !at_end)
++            return 0;
++        rc = pb_select(t, (uint32_t)pb_next[t] - 1u);
++        pb_next[t] = 0;
++        pb_fired[t] = (uint8_t)run;
++        return rc ? -rc : 1;
++    }
++    nx = at_end ? pb_chain_next(t) : -1;
++    if (nx < 0)
 +        return 0;
-+    rc = pb_select(t, (uint32_t)pb_next[t] - 1u);
-+    pb_next[t] = 0;
++    pb_keep = 1;
++    rc = pb_select(t, (uint32_t)nx);
++    pb_keep = 0;
++    pb_fired[t] = 1;
 +    return rc ? -rc : 1;
 +}
 +
@@ -561,10 +656,10 @@ index 0000000..e1a3d0a
 +#endif
 diff --git a/firmware/src/patbank_store.c b/firmware/src/patbank_store.c
 new file mode 100644
-index 0000000..1c2a0b6
+index 0000000..a220f55
 --- /dev/null
 +++ b/firmware/src/patbank_store.c
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,202 @@
 +/* SPDX-License-Identifier: GPL-3.0-only
 + * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 +/* The sequence banks in flash (patbank.c): store s (0..3 the projects A..D, PB_LIVE the music as it is now), six objects
@@ -595,6 +690,9 @@ index 0000000..1c2a0b6
 +    uint32_t n = pb_obj_pats(o), pos = PB_HDR, q;
 +    memset(pb_wire, 0, PB_HDR);
 +    pb_wire[0] = 'P'; pb_wire[1] = 'B'; pb_wire[2] = 1; pb_wire[3] = (uint8_t)o;
++    if (o == PB_META_O)                                 /* CHAIN: per track start (3 bits) and length - 1 (3 bits) */
++        for (q = 0; q < NTRK; q++)
++            pb_wire[4u + q] = (uint8_t)(pb_start[q] << 3 | (pb_run(q) - 1u));
 +    memcpy(pb_wire + pos, pb_pat[o * PB_PER], n * PB_PAT_B);
 +    pos += n * PB_PAT_B;
 +    if (o == PB_META_O) {
@@ -660,6 +758,11 @@ index 0000000..1c2a0b6
 +        if (pos + tot * sizeof(motion_event_t) > n) return 0;
 +    }
 +    memcpy(pb_pat[PB_META_O * PB_PER], pb_wire + PB_HDR, 2u * PB_PAT_B);
++    for (t = 0; t < NTRK; t++) {                        /* CHAIN (the header bytes were 0 before it: start 1, no chain) */
++        uint32_t b = pb_wire[4u + t], a = (b >> 3) & 7u, n = (b & 7u) + 1u;
++        pb_start[t] = (uint8_t)a;
++        pb_chain[t] = (uint8_t)(n > 1u && a + n <= PB_N ? n : 0u);
++    }
 +    for (q = 0; q < PB_NSEQ; q++) {
 +        uint32_t k;
 +        pb_mo[q].count = 0;
@@ -688,6 +791,60 @@ index 0000000..1c2a0b6
 +    return 1;
 +}
 +
++
++/* A song (song_chain.c, project.c chain_prepare) plays other projects' sequences: store s's sequence the project was saved on
++ * for each track (its record plays that one); 0 when there is no such store (the record's is "sequence 1") */
++static int pb_store_saved(uint32_t s, uint8_t *cur)
++{
++    uint32_t n, t;
++    memset(cur, 0, NTRK);
++    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + PB_META_O, pb_wire, sizeof pb_wire);
++    if ((int)n < 0 || n < PB_META_FIX || pb_wire[0] != 'P' || pb_wire[1] != 'B' || pb_wire[2] != 1 || pb_wire[3] != PB_META_O)
++        return 0;
++    for (t = 0; t < NTRK; t++)
++        cur[t] = pb_wire[PB_HDR + 2u * PB_PAT_B + t] < PB_N ? pb_wire[PB_HDR + 2u * PB_PAT_B + t] : 0u;
++    return 1;
++}
++/* store s's sequence q of track k, for a song: its steps (st, NSTEP), LEN and automation (mo: the track's records). 0 done;
++ * 1 no such store or object (the sequence is empty, LEN the default) */
++static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo)
++{
++    uint32_t n, qi = k * PB_N + q, pos, o, i, skip = 0, cnt;
++    uint8_t cur[NTRK];
++    for (i = 0; i < NSTEP; i++)
++        step_clear(&st[i]);
++    *len = (uint8_t)TP[P_SLEN].def;
++    memset(mo, 0, sizeof *mo);
++    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + PB_META_O, pb_wire, sizeof pb_wire);
++    if ((int)n < 0 || n < PB_META_FIX || pb_wire[0] != 'P' || pb_wire[1] != 'B' || pb_wire[2] != 1 || pb_wire[3] != PB_META_O)
++        return 1;
++    (void)cur;
++    pos = PB_HDR + 2u * PB_PAT_B + NTRK;
++    if (pb_wire[pos + qi] >= (uint32_t)TP[P_SLEN].min && pb_wire[pos + qi] <= (uint32_t)TP[P_SLEN].max)
++        *len = pb_wire[pos + qi];
++    pos += PB_NSEQ;                                      /* the (count, ON) pairs, then the records of those with some */
++    for (i = 0; i < qi; i++)
++        skip += pb_wire[pos + 2u * i];
++    cnt = pb_wire[pos + 2u * qi];
++    if (cnt && cnt <= PB_MO_MAX && pos + 2u * PB_NSEQ + (skip + cnt) * sizeof(motion_event_t) <= n) {
++        memcpy(mo->ev, pb_wire + pos + 2u * PB_NSEQ + skip * sizeof(motion_event_t), cnt * sizeof(motion_event_t));
++        mo->count = (uint8_t)cnt;
++        mo->on = pb_wire[pos + 2u * qi + 1u] != 0u;
++    }
++    if (qi >= PB_META_O * PB_PER) {                      /* the last two sequences are in the meta object itself */
++        /* (pb_wire holds it: read in place) */
++        if (n >= PB_HDR + (qi - PB_META_O * PB_PER + 1u) * PB_PAT_B)
++            (void)pb_unpack_pat(st, pb_wire + PB_HDR + (qi - PB_META_O * PB_PER) * PB_PAT_B);
++        return 0;
++    }
++    o = qi / PB_PER;
++    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + o, pb_wire, sizeof pb_wire);
++    if ((int)n == (int)(PB_HDR + PB_PER * PB_PAT_B) && pb_wire[0] == 'P' && pb_wire[1] == 'B' && pb_wire[2] == 1 &&
++        pb_wire[3] == o)
++        (void)pb_unpack_pat(st, pb_wire + PB_HDR + (qi % PB_PER) * PB_PAT_B);
++    return 0;
++}
++
 +/* the autosave's companion (project.c autosave_poll): the live store, the objects that changed; 0 ok */
 +static int pb_flush_live(void)
 +{
@@ -706,7 +863,7 @@ index 0000000..1c2a0b6
 +}
 +#endif
 diff --git a/firmware/src/project.c b/firmware/src/project.c
-index 2b03960..2ef4389 100644
+index 2b03960..b547fb6 100644
 --- a/firmware/src/project.c
 +++ b/firmware/src/project.c
 @@ -846,6 +846,15 @@ static int project_save_as(uint32_t slot, const char *name)
@@ -746,7 +903,91 @@ index 2b03960..2ef4389 100644
      }
  }
  
-@@ -1239,6 +1255,10 @@ static uint32_t autosave_sig(void)
+@@ -1105,18 +1121,47 @@ static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj
+ static uint32_t chain_prepare(void)
+ {
+     uint32_t i, k, j, used = 0;
++#if FELUCCA_PATBANK && FELUCCA_FLASH
++    uint32_t na = 0, saved_ok = 0;
++    uint8_t alt_s[CHAIN_ALT], alt_k[CHAIN_ALT], alt_q[CHAIN_ALT], saved[4][NTRK];
++#endif
+     if (transport_busy())
+         return 2;
+     if (!chain_valid(&chain_config) || !chain_config.count)
+         return 1;
+     for (i = 0; i < chain_config.count; i++)            /* the slots the lanes play (not the silent ones) */
+         for (k = 0; k < NTRK; k++) {
+-            uint32_t s = chain_config.row[i].slot[k];
+-            if (s >= 4u || ((used >> s) & 1u))
++            uint32_t s = CH_SLOT(chain_config.row[i].slot[k]);
++            chain.src[i][k] = CHAIN_SILENT;
++            if (s >= 4u)
+                 continue;
+-            if (!project_used(s))
+-                return 3u + s;
+-            used |= 1u << s;
++            if (!((used >> s) & 1u)) {
++                if (!project_used(s))
++                    return 3u + s;
++                used |= 1u << s;
++            }
++            chain.src[i][k] = (uint8_t)s;
++#if FELUCCA_PATBANK && FELUCCA_FLASH
++            if (CH_SEQ(chain_config.row[i].slot[k]) && flash_ok) {   /* 1.6: a sequence chosen: the one the project was saved on is the slot's */
++                uint32_t q = CH_SEQ(chain_config.row[i].slot[k]) - 1u, a;
++                if (!((saved_ok >> s) & 1u)) {
++                    (void)pb_store_saved(s, saved[s]);
++                    saved_ok |= 1u << s;
++                }
++                if (q == saved[s][k])
++                    continue;
++                for (a = 0; a < na; a++)
++                    if (alt_s[a] == s && alt_k[a] == k && alt_q[a] == q)
++                        break;
++                if (a == na) {
++                    if (na >= CHAIN_ALT)
++                        return 16u;                         /* more sequences chosen than the song can hold */
++                    alt_s[na] = (uint8_t)s; alt_k[na] = (uint8_t)k; alt_q[na] = (uint8_t)q;
++                    na++;
++                }
++                chain.src[i][k] = (uint8_t)(8u + a);
++            }
++#endif
+         }
+     chain.config = chain_config;
+     for (i = 0; i < 4u; i++)
+@@ -1143,6 +1188,30 @@ static uint32_t chain_prepare(void)
+                     chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
+                         TP[P_SLEN + j].min, TP[P_SLEN + j].max);
+             }
++#if FELUCCA_PATBANK && FELUCCA_FLASH
++            for (j = 0; j < na; j++)                    /* the chosen sequences of this slot: their own sources */
++                if (alt_s[j] == i) {
++                    chain_alt_t *al = &chain_alt[j];
++                    pb_mo_t pm;
++                    uint8_t len;
++                    uint32_t e, n = 0;
++                    k = alt_k[j];
++                    (void)pb_store_fetch(i, k, alt_q[j], al->step, &len, &pm);
++                    proj_steps(al->step);
++                    memcpy(al->timing, chain.source[i].timing[k], sizeof al->timing);
++                    al->timing[0] = (int16_t)clamp((int32_t)len, TP[P_SLEN].min, TP[P_SLEN].max);
++                    al->qnt = chain.source[i].qnt[k];
++                    memset(&al->motion, 0, sizeof al->motion);
++                    for (e = 0; e < pm.count && e < PB_MO_MAX; e++) {
++                        const motion_event_t *v = &pm.ev[e];
++                        if ((uint32_t)(v->place >> 6) != k || (MOTION_ID(v) >= P_FM1_ATK && p->t[k].engine != trk[k].eng_req))
++                            continue;
++                        al->motion.event[n++] = *v;
++                    }
++                    al->motion.count = (uint8_t)n;
++                    al->motion.on = pm.on ? (uint8_t)(1u << k) : 0u;
++                }
++#endif
+         }
+     RING_PUBLISH();
+     chain.armed = 1;
+@@ -1239,6 +1308,10 @@ static uint32_t autosave_sig(void)
          if (i != G_SLOT && i != G_NAME && i != G_LOAD && i != G_SAVE)
              h = as_mix(h, &song.g[i], sizeof song.g[i]);
      h = as_mix(h, &motion, sizeof motion);
@@ -757,7 +998,7 @@ index 2b03960..2ef4389 100644
      h = as_mix(h, &chain_config, sizeof chain_config);
      return as_mix(h, proj_name, sizeof proj_name);
  }
-@@ -1277,6 +1297,12 @@ static void autosave_poll(void)
+@@ -1277,6 +1350,12 @@ static void autosave_poll(void)
          return;
      as.last = fm1_ms;
      as.wrote = 1;
@@ -770,7 +1011,7 @@ index 2b03960..2ef4389 100644
      project_capture(&proj_scratch);
      proj_wire_gen++;
      as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0;
-@@ -1301,6 +1327,9 @@ static int autosave_boot(int allowed)
+@@ -1301,6 +1380,9 @@ static int autosave_boot(int allowed)
          if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
              proj_bound(&proj_scratch);
              if (!project_restore_runtime(&proj_scratch)) {
@@ -780,6 +1021,95 @@ index 2b03960..2ef4389 100644
                  ui_message("RESTORED");
                  rc = 1;
              }
+diff --git a/firmware/src/seq.c b/firmware/src/seq.c
+index 9086755..e9337fc 100644
+--- a/firmware/src/seq.c
++++ b/firmware/src/seq.c
+@@ -1007,6 +1007,8 @@ static int32_t seq_nudge(const track_t *t, const step_t *s)
+ static const motion_store_t *chain_motion(const track_t *t)
+ {
+     uint32_t s = chain.lane[trk_index(t)];
++    if (chain.running && s < 4u && chain.alt[trk_index(t)] != CHAIN_NOALT)
++        return &chain_alt[chain.alt[trk_index(t)]].motion;
+     return !chain.running ? &motion : s < 4u ? &chain.source[s].motion : 0;
+ }
+ 
+diff --git a/firmware/src/song_chain.c b/firmware/src/song_chain.c
+index 3a59238..73c6011 100644
+--- a/firmware/src/song_chain.c
++++ b/firmware/src/song_chain.c
+@@ -21,6 +21,16 @@ typedef struct {
+     motion_store_t motion;
+ } chain_pattern_t;
+ static chain_config_t chain_config;
++#define CHAIN_ALT 6u                         /* 1.6: sequences chosen on lanes (other than the one a project was saved on): sources of
++                                              * their own, one per (project, track, sequence) the song uses */
++#define CHAIN_NOALT 0xFFu
++typedef struct {
++    step_t step[NSTEP];
++    int16_t timing[4];                       /* LEN (the sequence's) DIV SWING GATE (the project's) */
++    uint8_t qnt;
++    motion_store_t motion;                   /* the sequence's automation: the track's events only */
++} chain_alt_t;
++static chain_alt_t chain_alt[CHAIN_ALT] __attribute__((section(".pool")));
+ static struct {
+     chain_pattern_t source[4];
+     chain_config_t config;
+@@ -28,6 +38,8 @@ static struct {
+     uint8_t qnt[NTRK];
+     volatile uint8_t armed, running, row, remaining;
+     uint8_t lane[NTRK];                      /* the slot each track plays in this section, CHAIN_SILENT none */
++    uint8_t alt[NTRK];                       /* 1.6: its source in chain_alt when the lane chose a sequence, CHAIN_NOALT: the slot's */
++    uint8_t src[CHAIN_ROWS][NTRK];           /* each section's lanes' sources (chain_prepare): a slot 0..3, CHAIN_SILENT, 8 + chain_alt's */
+     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
+     uint8_t rec;
+     uint32_t carry;
+@@ -64,7 +76,7 @@ static int chain_valid(const chain_config_t *c)
+         return 0;
+     for (i = 0; i < c->count; i++) {
+         for (k = 0; k < NTRK; k++)
+-            if (c->row[i].slot[k] > CHAIN_SILENT)
++            if (CH_SLOT(c->row[i].slot[k]) > CHAIN_SILENT || CH_SEQ(c->row[i].slot[k]) > 8u)
+                 return 0;
+         if (!c->row[i].repeat || c->row[i].repeat > 16u)
+             return 0;
+@@ -92,7 +104,7 @@ static uint32_t chain_clock(const chain_row_t *r)
+ {
+     uint32_t k;
+     for (k = 0; k < NTRK; k++)
+-        if (r->slot[k] < CHAIN_SILENT)
++        if (CH_SLOT(r->slot[k]) < CHAIN_SILENT)
+             return k;
+     return 0;
+ }
+@@ -104,6 +116,8 @@ static const step_t *seq_steps(const track_t *t)
+     if (!chain.running)
+         return t->step;
+     s = chain.lane[k];
++    if (s < 4u && chain.alt[k] != CHAIN_NOALT)
++        return chain_alt[chain.alt[k]].step;
+     return s < 4u ? chain.source[s].step[k] : chain_silent;
+ }
+ static void motion_restore(track_t *t);
+@@ -115,13 +129,15 @@ static __attribute__((noinline)) void chain_apply(void)
+     chain.clk = (uint8_t)chain_clock(r);
+     for (i = 0; i < NTRK; i++) {
+         track_t *t = &trk[i];
+-        uint32_t s = r->slot[i];
++        uint32_t s = CH_SLOT(r->slot[i]), a = chain.src[chain.row][i];
+         chain.lane[i] = (uint8_t)(s < 4u ? s : CHAIN_SILENT);
++        chain.alt[i] = (uint8_t)(s < 4u && a >= 8u && a - 8u < CHAIN_ALT ? a - 8u : CHAIN_NOALT);
+         seq_release(t);
+         motion_restore(t);
+         if (s < 4u) {
+-            memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
+-            t->p[P_SQNT] = chain.source[s].qnt[i];
++            memcpy(&t->p[P_SLEN], chain.alt[i] != CHAIN_NOALT ? chain_alt[chain.alt[i]].timing : chain.source[s].timing[i],
++                   sizeof chain.timing[i]);
++            t->p[P_SQNT] = chain.alt[i] != CHAIN_NOALT ? chain_alt[chain.alt[i]].qnt : chain.source[s].qnt[i];
+         } else {
+             t->p[P_SLEN] = CHAIN_SIL_LEN;
+             t->p[P_SDIV] = CHAIN_SIL_DIV;
 diff --git a/firmware/src/storage.c b/firmware/src/storage.c
 index aea1162..d137939 100644
 --- a/firmware/src/storage.c
@@ -855,19 +1185,20 @@ index aea1162..d137939 100644
      cur = st_current(obj, &h);
      seq = cur < 0 ? 0u : h.seq;
 diff --git a/firmware/src/ui.c b/firmware/src/ui.c
-index 7d4f48f..79a6a9f 100644
+index 7d4f48f..07565ae 100644
 --- a/firmware/src/ui.c
 +++ b/firmware/src/ui.c
-@@ -23,6 +23,8 @@ static uint32_t up_pat_count(void);
+@@ -23,6 +23,9 @@ static uint32_t up_pat_count(void);
  static uint32_t up_pat_nth(uint32_t n);
  static uint32_t up_pat_rank(uint32_t slot);
  static void up_pat_load(track_t *t, uint32_t k);
 +static void seq_switch_ui(uint32_t t, uint32_t s);   /* ui_layer.c: track t plays sequence s (patbank.c) */
 +static void seq_poll(void);                          /* ui_layer.c: the queued switches (SEQ SWITCH END), main loop */
++static void seq_chain_ui(uint32_t t, int32_t steps);  /* ui_layer.c: PRESETS on SEQ > SEQUENCE: the chain's length */
  static void up_auto_name(char *b, uint32_t e, uint32_t k);   /* naming (ui_name.c) */
  static void up_ui_named(uint32_t op, uint32_t k, const char *name, uint32_t cat);
  static uint32_t up_cat(uint32_t k);
-@@ -65,13 +67,15 @@ static uint32_t up_gen;                      /* bumped on every user bank change
+@@ -65,13 +68,15 @@ static uint32_t up_gen;                      /* bumped on every user bank change
  /* 1.2: three more two-valued MENU settings, bits of another byte no engine uses, saved with the settings; 0 in older
   * settings = today's behaviour (append-only, as ui_prefs): bit 0 DISPLAY > SCOPE MIX (Discussion #165, fx.c scope_mix),
   * bit 1 CONTROL > STEP PREVIEW ON (Discussion #169, ui_input.c step_preview), bit 2 CONTROL > CHORD ENTRY ADD (#155,
@@ -884,7 +1215,7 @@ index 7d4f48f..79a6a9f 100644
  /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
   * oscilloscope, as before), 1 TRACKS (the four tracks as rows: ui_graph.c draw_home_tracks), 2 LEVELS (1.5, #134: the
   * rows of TRACKS, and KNOB 1..4 the LEVEL of T1..T4 in place of the engine's four: home_param). A byte of its own no
-@@ -355,7 +359,7 @@ static uint32_t large_kind(void)
+@@ -355,7 +360,7 @@ static uint32_t large_kind(void)
          return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
      g = cur_page()->graph;
      return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
@@ -893,7 +1224,16 @@ index 7d4f48f..79a6a9f 100644
  }
  /* the geometry of the page shown: the cards' height, the panel's top and height */
  static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
-@@ -1576,6 +1580,7 @@ static void track_select(uint32_t i)
+@@ -448,6 +453,8 @@ static void chain_play_ui(void)
+     uint32_t rc = chain_prepare();
+     if (!rc) {
+         ui.force = 1;
++    } else if (rc == 16u) {
++        ui_message("TOO MANY SEQ");                     /* (more sequences chosen on lanes than a song holds: CHAIN_ALT) */
+     } else if (rc >= 3u) {
+         char b[8] = "A EMPTY";
+         b[0] = (char)('A' + rc - 3u);
+@@ -1576,6 +1583,7 @@ static void track_select(uint32_t i)
  #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
  #include "ui_events.c"                            /* SEQ > AUTOMATION: locks, events, CHANCE, RATCH as a list (an action page) */
  #include "midi_learn.c"                           /* MIDI LEARN (1.5): GLO + D4, a knob, a CC */
@@ -902,20 +1242,45 @@ index 7d4f48f..79a6a9f 100644
  /* ---------------------------------------------------- action pages --- */
  /* Pages whose purpose is an action (SAVE > USER, PHRASES, PROJECT, TOOLS, EDIT > SLICES, SEQ > AUTOMATION): the knobs pick,
 diff --git a/firmware/src/ui_draw.c b/firmware/src/ui_draw.c
-index 627ac60..de15e2e 100644
+index 627ac60..6c9a4f3 100644
 --- a/firmware/src/ui_draw.c
 +++ b/firmware/src/ui_draw.c
-@@ -992,6 +992,18 @@ static void draw_columns(void)
+@@ -883,6 +883,7 @@ static void draw_columns(void)
+     }
+     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
+         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
++        char sq[3];
+         int used = row < chain_config.count;
+         fmt_int(val, (int32_t)row + 1);
+         draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_X_SONG);
+@@ -890,10 +891,13 @@ static void draw_columns(void)
+         val[1] = (char)('1' + k);
+         val[2] = 0;
+         draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
+-        sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
++        sl = used ? CH_SLOT(chain_config.row[row].slot[k]) : CHAIN_SILENT;
+         if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
+         else str_cpy(val, "--", sizeof val);
+-        draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
++        sq[0] = 'S'; sq[1] = used && sl < 4u && CH_SEQ(chain_config.row[row].slot[k]) ?
++                (char)('0' + CH_SEQ(chain_config.row[row].slot[k])) : 0;   /* (1.6: the sequence chosen: "S3"; none: the saved one) */
++        sq[2] = 0;
++        draw_column(2, "PAT", val, sq[1] ? sq : "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
+         if (used) fmt_int(val, chain_config.row[row].repeat);
+         else str_cpy(val, "--", sizeof val);
+         draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
+@@ -992,6 +996,19 @@ static void draw_columns(void)
          for (c = 0; c < 4u; c++) draw_act_column(c, labels[c], VAL(c), icons[c]);
          return;
      }
 +#if FELUCCA_PATBANK
 +    if (cur_page()->graph == GR_SEQS) {                /* SEQUENCE: the sequence (1..8) each track plays, KNOB 1..4 */
-+        char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0};
++        char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0}, cn[3] = {'x', '1', 0};   /* (cn: the chain's length) */
 +        for (c = 0; c < NTRK; c++) {
 +            lb[1] = (char)('1' + c);
 +            sq[0] = (char)('1' + pb_target(c));                 /* (a waiting switch: the one it waits for, "NEXT") */
-+            draw_column(c, lb, sq, pb_next[c] ? "NEXT" : "/8", c == song.sel ? T_ACCENT : VAL(c),
++            cn[1] = (char)('0' + pb_run(c));
++            draw_column(c, lb, sq, pb_next[c] ? "NEXT" : pb_run(c) > 1u ? cn : "/8", c == song.sel ? T_ACCENT : VAL(c),
 +                        (int32_t)pb_target(c) * 1000 / 7, ICON_X_PATTERN);
 +        }
 +        return;
@@ -925,10 +1290,19 @@ index 627ac60..de15e2e 100644
          const track_t *t = TSEL;
          uint32_t lvl = trk_level(song.sel);
 diff --git a/firmware/src/ui_graph.c b/firmware/src/ui_graph.c
-index 35f3152..66a4af1 100644
+index 35f3152..c8b5f91 100644
 --- a/firmware/src/ui_graph.c
 +++ b/firmware/src/ui_graph.c
-@@ -1880,6 +1880,41 @@ static void home_track_row(uint32_t c)
+@@ -1010,7 +1010,7 @@ static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
+ }
+ static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section: its clock track's (1/48 quarters) */
+ {
+-    uint32_t k = chain_clock(r), s = r->slot[k];
++    uint32_t k = chain_clock(r), s = CH_SLOT(r->slot[k]);
+     return s < 4u && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
+ }
+ static void song_layout(song_lay_t *L)
+@@ -1880,6 +1880,43 @@ static void home_track_row(uint32_t c)
      tr_meter(TR_MX, TR_MY, c, cs, sel ? T_INK : T_MID, bg);
      cv_blit(3, (uint32_t)y);
  }
@@ -947,7 +1321,7 @@ index 35f3152..66a4af1 100644
 +        uint32_t sel = c == song.sel, mask = 0, sig;
 +        for (r = 0; r < PB_N; r++)
 +            mask |= (uint32_t)pb_filled(c, r) << r;
-+        sig = (mask | (uint32_t)pb_cur[c] << 8 | sel << 12 | (uint32_t)pb_next[c] << 16) * 2654435761u + 1u;
++        sig = (mask | (uint32_t)pb_cur[c] << 8 | sel << 12 | (uint32_t)pb_next[c] << 16 | (uint32_t)pb_start[c] << 20 | pb_run(c) << 24) * 2654435761u + 1u;
 +        if (!ui.force && sig == sqs_sig[c])
 +            continue;
 +        sqs_sig[c] = sig;
@@ -960,6 +1334,8 @@ index 35f3152..66a4af1 100644
 +            uint16_t ink = on || nx ? T_INK : full ? (sel ? T_TEXT : T_MID) : T_DIM;
 +            char b[2] = {(char)('1' + r), 0};
 +            cv_rrect(0, y, CARD_W, 12, 3, fill, T_BG);
++            if (pb_run(c) > 1u && r >= pb_start[c] && r < pb_start[c] + pb_run(c))   /* a chained one: a bar at its left */
++                cv_rrect(3, y + 3, 3, 6, 1, on || nx ? T_INK : T_MID, fill);
 +            GFX_HOOK_ALIGN(0, y, CARD_W, y + 12, AL_HV, "sequence cell digit centred");
 +            cv_text_in(0, y + CAP_IN(S, 12), CARD_W, &AF_S, b, ink, fill);
 +        }
@@ -970,7 +1346,49 @@ index 35f3152..66a4af1 100644
  static void draw_home_tracks(void)
  {
      uint32_t c;
-@@ -2227,6 +2262,12 @@ static void draw_graph(void)
+@@ -2118,8 +2155,8 @@ static void graph_song(void)
+     }
+     for (k = 0; k < NTRK; k++)                        /* the lanes: a block per run of one slot, "-" a faint line */
+         for (i = 0; i < L.n; i = j) {
+-            uint32_t s = chain_config.row[i].slot[k];
+-            for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
++            uint32_t sb = chain_config.row[i].slot[k], s = CH_SLOT(sb);
++            for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == sb; j++)     /* (a run of one slot and one sequence) */
+                 ;
+             if (s < 4u) {
+                 sg_block(&L, off, k, i, j, s, k == lane ? c : CHAIN_ROWS, sp);
+@@ -2155,7 +2192,7 @@ static void graph_song(void)
+         if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
+         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
+             for (k = 0; k < NTRK; k++) {
+-                uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
++                uint32_t s = c < L.n ? CH_SLOT(chain_config.row[c].slot[k]) : CHAIN_SILENT;
+                 int on = k == lane && s < 4u && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
+                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
+                 cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < NTRK ? SG_LG : 0), on ? T_INK : T_ACCENT);
+@@ -2203,12 +2240,19 @@ static void graph_song(void)
+         cv_text_on(x0, ly, fl, b, T_MID, T_SURF);
+     }
+     if (c < L.n) {
+-        uint32_t s = chain_config.row[c].slot[lane];
++        uint32_t sb = chain_config.row[c].slot[lane], s = CH_SLOT(sb), sq = CH_SEQ(sb);
++        char nb[24];
+         if (s >= 4u)
+             cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
+         else if (!graph_project_used(s))
+             cv_free_text(SG_X0, ly, fl, "NOT SAVED", T_DIM, T_SURF, x0 - 10 - SG_X0);
+-        else if (graph_project_name(s)[0])
++        else if (sq) {                                 /* 1.6: a sequence chosen: "NAME  SEQ 3" */
++            str_cpy(nb, graph_project_name(s), 14);
++            str_cpy(nb + str_len(nb), " SEQ ", 6);
++            nb[str_len(nb) + 1] = 0;
++            nb[str_len(nb)] = (char)('0' + sq);
++            cv_free_text(SG_X0, ly, fl, nb, T_MID, T_SURF, x0 - 10 - SG_X0);
++        } else if (graph_project_name(s)[0])
+             cv_free_text(SG_X0, ly, fl, graph_project_name(s), T_MID, T_SURF, x0 - 10 - SG_X0);
+     } else {                                           /* + ADD: how */
+         for (i = 0; i < 4u && !graph_project_used(i); i++)
+@@ -2227,6 +2271,12 @@ static void draw_graph(void)
          draw_tracks();
          return;
      }
@@ -984,22 +1402,31 @@ index 35f3152..66a4af1 100644
          draw_home_tracks();
          return;
 diff --git a/firmware/src/ui_help.c b/firmware/src/ui_help.c
-index 595d5fd..675da53 100644
+index 595d5fd..4ceecf6 100644
 --- a/firmware/src/ui_help.c
 +++ b/firmware/src/ui_help.c
+@@ -41,7 +41,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
+     {"VOICE", "[K1]POLY, MONO[K2]GLIDE"},
+     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
+     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
+-    {"SONG", "[K1]SECTION[KEYS]A-D[PLAY]SONG"},
++    {"SONG", "[K1]SECTION[KEYS]A-D[PRESETS]SEQ"},
+     {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
+     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
+     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
 @@ -52,6 +52,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
      {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */
      {"DETAIL", "[PRESETS]STEP[K1]CHANCE[K2]RATCH"},
      {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
-+    {"SEQUENCE", "[K1-4]TRACKS[SEQ]HOLD: C5-G5"},
++    {"SEQUENCE", "[K1-4]TRACKS[PRESETS]CHAIN"},
      {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},
      {"CLOCK", "[SELECT]TEMPO[GLO]HOLD: TAP"},
  };
 diff --git a/firmware/src/ui_input.c b/firmware/src/ui_input.c
-index c0f9ab4..1a6169e 100644
+index c0f9ab4..2c34a57 100644
 --- a/firmware/src/ui_input.c
 +++ b/firmware/src/ui_input.c
-@@ -471,6 +471,14 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
+@@ -471,6 +471,44 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
  
  /* MIXER page: KNOB 1 LEVEL, 2 PAN, 3 REV send, 4 MUTE of the selected track (right = ON, left = OFF: the
   * track itself is ALGORITHM's, on every page). Pattern length stays on SEQ. */
@@ -1011,10 +1438,71 @@ index c0f9ab4..1a6169e 100644
 +    seq_switch_ui(slot % NTRK, (uint32_t)clamp(n, 0, (int32_t)PB_N - 1));
 +}
 +#endif
++#if FELUCCA_PATBANK
++/* SONG: PRESETS turns the sequence the selected cell plays (its project's): 0 the one the project was saved on, 1..8 that one */
++static void song_seq_edit(int32_t steps)
++{
++    uint8_t *b;
++    uint32_t s, q;
++    char n[2] = {0, 0}, a[8] = "A SEQ ";
++    if (chain_busy()) {
++        ui_message("STOP TO EDIT");
++        return;
++    }
++    if (ui.song_row >= chain_config.count || ui.song_row >= CHAIN_ROWS)
++        return;
++    b = &chain_config.row[ui.song_row].slot[ui.song_trk % NTRK];
++    s = CH_SLOT(*b);
++    if (s >= 4u) {
++        ui_message("SILENT: NO SEQ");
++        return;
++    }
++    q = (uint32_t)clamp((int32_t)CH_SEQ(*b) + steps, 0, (int32_t)PB_N);
++    *b = CH_MAKE(s, q);
++    a[0] = (char)('A' + s);
++    n[0] = (char)('0' + q);
++    if (q)
++        ui_say(a, n);
++    else
++        ui_say(a, "AS SAVED");
++    ui.force = 1;
++}
++#endif
  static void tracks_edit(uint32_t slot, int32_t steps)
  {
      track_t *t = TSEL;
-@@ -940,7 +948,7 @@ static void edit_param(uint32_t slot, int32_t steps)
+@@ -533,7 +571,10 @@ static void song_keys(uint32_t notes)
+             if (chain_config.count == 1u)
+                 chain_config.row[0] = chain_row_of((uint32_t)s, 1);
+         }
+-        chain_config.row[ui.song_row].slot[ui.song_trk % NTRK] = (uint8_t)s;
++        {
++            uint8_t *lb = &chain_config.row[ui.song_row].slot[ui.song_trk % NTRK];
++            *lb = CH_MAKE(s, CH_SLOT(*lb) == (uint32_t)s ? CH_SEQ(*lb) : 0u);      /* (another slot: its saved sequence) */
++        }
+         ui.force = 1;
+     }
+ }
+@@ -541,7 +582,7 @@ static void song_keys(uint32_t notes)
+ static uint32_t song_leds(void)
+ {
+     uint32_t k, s;
+-    if (ui.song_row >= chain_config.count || (s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) >= 4u)
++    if (ui.song_row >= chain_config.count || (s = CH_SLOT(chain_config.row[ui.song_row].slot[ui.song_trk % NTRK])) >= 4u)
+         return 0;
+     for (k = 0; k < 27u; k++)
+         if (song_key(k) == (int32_t)s)
+@@ -934,13 +975,14 @@ static void edit_param(uint32_t slot, int32_t steps)
+             if (slot == 2u) return;
+         }
+         r = &chain_config.row[ui.song_row];
+-        if (slot == 2u)
+-            r->slot[ui.song_trk % NTRK] = (uint8_t)clamp((int32_t)r->slot[ui.song_trk % NTRK] + steps, 0, CHAIN_SILENT);
+-        else
++        if (slot == 2u) {
++            uint32_t ns = (uint32_t)clamp((int32_t)CH_SLOT(r->slot[ui.song_trk % NTRK]) + steps, 0, CHAIN_SILENT);
++            r->slot[ui.song_trk % NTRK] = CH_MAKE(ns, ns == CH_SLOT(r->slot[ui.song_trk % NTRK]) ? CH_SEQ(r->slot[ui.song_trk % NTRK]) : 0u);
++        } else
              r->repeat = (uint8_t)clamp((int32_t)r->repeat + steps, 1, 16);
          return;
      }
@@ -1023,7 +1511,7 @@ index c0f9ab4..1a6169e 100644
          0)) {
          ui_message("STOP TO EDIT"); return;
      }
-@@ -948,6 +956,12 @@ static void edit_param(uint32_t slot, int32_t steps)
+@@ -948,6 +990,12 @@ static void edit_param(uint32_t slot, int32_t steps)
          step_edit(slot, steps);
          return;
      }
@@ -1036,11 +1524,28 @@ index c0f9ab4..1a6169e 100644
      if (pg->scope == SC_TRK) {
          tracks_edit(slot, steps);
          return;
+@@ -1228,6 +1276,16 @@ static void presets_turn(int32_t s)
+         nudge_turn(held, s);
+         return;
+     }
++#if FELUCCA_PATBANK
++    if (!ui.home && g == GR_SEQS) {                       /* SEQ > SEQUENCE: PRESETS = CHAIN (the selected track's) */
++        seq_chain_ui(song.sel, s);
++        return;
++    }
++    if (!ui.home && g == GR_SONG) {                       /* SONG: PRESETS = the cell's sequence (KNOB 1 is the section) */
++        song_seq_edit(s);
++        return;
++    }
++#endif
+     if (ui.home || g == GR_BROWSE) {
+         preset_step(s);
+     } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_PATS || g == GR_SONG || g == GR_EVENTS) {
 diff --git a/firmware/src/ui_layer.c b/firmware/src/ui_layer.c
-index 089fa9c..a7c8bd9 100644
+index 089fa9c..b239675 100644
 --- a/firmware/src/ui_layer.c
 +++ b/firmware/src/ui_layer.c
-@@ -376,6 +376,64 @@ static void glo_tap(void)
+@@ -376,6 +376,81 @@ static void glo_tap(void)
      }
  }
  
@@ -1083,6 +1588,21 @@ index 089fa9c..a7c8bd9 100644
 +    } else
 +        seq_after(t, rc);
 +}
++/* PRESETS on SEQ > SEQUENCE: how many sequences chain from the selected track's (1: none) */
++static void seq_chain_ui(uint32_t t, int32_t steps)
++{
++    char w[10] = {'T', (char)('1' + t % NTRK), ' ', 'C', 'H', 'A', 'I', 'N', 0, 0}, v[4] = {0, 0, 0, 0};
++    uint32_t n;
++    t %= NTRK;
++    pb_need();
++    n = pb_set_chain(t, (uint32_t)clamp((int32_t)pb_run(t) + steps, 1, (int32_t)PB_N));
++    if (n > 1u) {
++        v[0] = (char)('0' + n);
++        ui_say(w, v);
++    } else
++        ui_say(w, "OFF");
++    ui.force = 1;
++}
 +/* main loop, every pass (main.c) */
 +static void seq_poll(void)
 +{
@@ -1093,6 +1613,8 @@ index 089fa9c..a7c8bd9 100644
 +            pb_next[t] = 0;
 +            continue;
 +        }
++        if (chain_busy())                                /* (a song plays its own) */
++            continue;
 +        rc = pb_due(t);
 +        if (rc)
 +            seq_after(t, rc > 0 ? 0 : rc);
@@ -1105,7 +1627,7 @@ index 089fa9c..a7c8bd9 100644
  /* SEQ TOOLS: white key place p's action on the selected track (ui_tools.c), "STOP TO EDIT" while a song plays */
  static void tools_key(uint32_t p)
  {
-@@ -642,6 +700,12 @@ static void layer_key(uint32_t l, uint32_t k)
+@@ -642,6 +717,12 @@ static void layer_key(uint32_t l, uint32_t k)
          if (!key_black(k) && p < 4u)
              rec_key(p);
      } else if (l == LAYER_SEQ) {
@@ -1118,7 +1640,7 @@ index 089fa9c..a7c8bd9 100644
          if (!key_black(k))
              tools_key(p);
          else if (p < NLANE && drum_track(TSEL))
-@@ -816,6 +880,12 @@ static uint32_t layer_leds(uint32_t *br)
+@@ -816,6 +897,12 @@ static uint32_t layer_leds(uint32_t *br)
          } else if (l == LAYER_EDIT && (a = eqa_of(TSEL, p)) != 0) {   /* the quick actions: on lit (DRUM: sounding), */
              on = a->on(TSEL, a->arg) != 0u;             /* a HOLD one off breathes, none dark */
              can = a->kind == LK_HOLD;
@@ -1131,7 +1653,7 @@ index 089fa9c..a7c8bd9 100644
          } else if (l == LAYER_SEQ) {                    /* the tools breathe (not while a song plays); DRUM: the lane */
              on = b && p < NLANE && drum_track(TSEL) && p == ui.lane;   /* lit, the other lanes breathe */
              can = b ? p < NLANE && drum_track(TSEL) : tl_cell(TSEL, p) && !chain_busy();
-@@ -1025,9 +1095,9 @@ static void layer_edit(void)                            /* the engines from F3,
+@@ -1025,9 +1112,9 @@ static void layer_edit(void)                            /* the engines from F3,
   * track the lanes of black keys 1..8 under them (the selected one: the selection's fill). A melodic track: the two
   * rows of the sequence's tools only */
  static const uint8_t TL_ICON[TL_N] = {ICON_CLEAR, ICON_X_REVERSE, ICON_X_LEFT, ICON_X_RIGHT, ICON_PROB, ICON_W_SH,
@@ -1144,7 +1666,7 @@ index 089fa9c..a7c8bd9 100644
  static void layer_seq(void)
  {
      uint32_t p, st = chain_busy() ? LS_DIM : LS_OFF, drum = (uint32_t)drum_track(TSEL);
-@@ -1037,7 +1107,7 @@ static void layer_seq(void)
+@@ -1037,7 +1124,7 @@ static void layer_seq(void)
              continue;
          n[0] = W_NOTE[p];
          str_cpy(nm, TL_NAME[p], sizeof nm);
@@ -1319,10 +1841,10 @@ index 034e8b5..a59b0cb 100644
  static uint8_t rep[1024];                         /* the editor's reply */
 diff --git a/tests/patbank_test.c b/tests/patbank_test.c
 new file mode 100644
-index 0000000..4b6da94
+index 0000000..6dd3474
 --- /dev/null
 +++ b/tests/patbank_test.c
-@@ -0,0 +1,307 @@
+@@ -0,0 +1,422 @@
 +/* SPDX-License-Identifier: GPL-3.0-only
 + * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 +/* Eight sequences per track (patbank.c, patbank_store.c): the packed steps are a project's, a switch keeps each sequence's
@@ -1407,6 +1929,7 @@ index 0000000..4b6da94
 +    flash_ok = 1;
 +    erase_error = 0;
 +    fail_after = -1;
++    ui_prefs2 = 0;
 +    pb_ready = 0;
 +    pb_dirty = 0;
 +    pb_clear_all();
@@ -1627,6 +2150,120 @@ index 0000000..4b6da94
 +        bad += check("SEQ SWITCH: NOW at once; END waits for the last step (or a wrap seen), stopped switches at once, same slot cancels", ok);
 +    }
 +
++    {   /* CHAIN: sequences start .. start + n - 1 play one after the other, the last back to the first */
++        uint32_t pass, pol;
++        reset();
++        song.playing = 1; trk[0].p[P_SLEN] = 16;
++        (void)pb_request(0, 1);                                    /* NOW: sequence 2 chosen: the chain's first */
++        ok = pb_start[0] == 1 && pb_run(0) == 1 && pb_chain_next(0) == -1;
++        ok &= pb_set_chain(0, 3) == 3 && pb_run(0) == 3 && pb_chain_next(0) == 2;
++        memset(pb_last, 0, sizeof pb_last);                        /* (the polls of an earlier test) */
++        for (i = 0; i < 4u; i++) { trk[0].seq_idx = i; for (t = 0; t < NTRK; t++) (void)pb_due(t); }
++        ok &= pb_cur[0] == 1;                                      /* mid pass: nothing */
++        {
++            static const uint8_t want[] = {2, 3, 1, 2, 3, 1};     /* the end of each pass: the next, the last back to the first */
++            for (pass = 0; pass < 6u; pass++) {
++                for (pol = 0; pol < 5u; pol++) {                   /* many polls on the last step: one switch */
++                    trk[0].seq_idx = 15;
++                    (void)pb_due(0);
++                }
++                ok &= pb_cur[0] == want[pass];
++                trk[0].seq_idx = 0; (void)pb_due(0);               /* the next pass under way */
++                trk[0].seq_idx = 7; (void)pb_due(0);
++            }
++        }
++        ok &= pb_start[0] == 1 && pb_set_chain(0, 8) == 7;        /* from the second: 7 at most */
++        (void)pb_request(0, 6);                                    /* chosen: 7th, a chain of 2 left (7th, 8th) */
++        ok &= pb_start[0] == 6 && pb_run(0) == 2 && pb_set_chain(0, 8) == 2;
++        trk[0].seq_idx = 15; (void)pb_due(0);
++        ok &= pb_cur[0] == 7;
++        trk[0].seq_idx = 3; (void)pb_due(0); trk[0].seq_idx = 15; (void)pb_due(0);
++        ok &= pb_cur[0] == 6;
++        (void)pb_set_chain(0, 1);                                  /* 1: off */
++        trk[0].seq_idx = 3; (void)pb_due(0); trk[0].seq_idx = 15; (void)pb_due(0);
++        ok &= pb_cur[0] == 6 && pb_run(0) == 1 && !pb_chain[0];
++        song.playing = 0;                                          /* stopped: a chain does not advance */
++        (void)pb_set_chain(0, 2); trk[0].seq_idx = 15; (void)pb_due(0);
++        ok &= pb_cur[0] == 6;
++        bad += check("CHAIN: the sequences play one after the other, once a pass, the last back to the first; a chosen one starts it", ok);
++        /* a waiting switch (SEQ SWITCH END) wins over the chain's next, and starts a new chain */
++        reset();
++        menu_put(MI_SEQSW, 1); song.playing = 1; trk[0].p[P_SLEN] = 16;
++        (void)pb_set_chain(0, 3); (void)pb_request(0, 5);          /* waits for sequence 6 */
++        trk[0].seq_idx = 15; (void)pb_due(0);
++        ok = pb_cur[0] == 5 && pb_start[0] == 5 && pb_run(0) == 3 && pb_chain_next(0) == 6;
++        menu_put(MI_SEQSW, 0);
++        bad += check("CHAIN: a waiting switch goes first and its sequence starts the chain", ok);
++        /* the chain is saved with the project and with the live music */
++        reset();
++        (void)pb_request(0, 2); (void)pb_set_chain(0, 4); (void)pb_request(2, 5); (void)pb_set_chain(2, 3);
++        ok = project_save_as(0, "CH") == 0;
++        memset(trk, 0, sizeof trk); memset(&motion, 0, sizeof motion); memset(motion_active, 0, sizeof motion_active);
++        host_tracks_init(); pb_ready = 0; pb_clear_all(); memset(proj_slot, 0, sizeof proj_slot);
++        ok &= pb_run(0) == 1;
++        project_load(0);
++        ok &= pb_start[0] == 2 && pb_run(0) == 4 && pb_cur[0] == 2 && pb_start[2] == 5 && pb_run(2) == 3 && pb_run(1) == 1;
++        (void)pb_request(1, 3); (void)pb_set_chain(1, 2);
++        as_run(120000u);
++        power_cycle();
++        ok &= pb_start[1] == 3 && pb_run(1) == 2 && pb_start[0] == 2 && pb_run(0) == 4;
++        bad += check("CHAIN: kept by project SAVE / LOAD and by the autosave (the live store)", ok);
++    }
++
++    {   /* SONG: a lane can play any of its project's sequences (CH_SEQ), from the project's store */
++        reset();
++        note(0, 0, 40);
++        (void)pb_select(0, 2); note(0, 1, 42); trk[0].p[P_SLEN] = 8; (void)motion_set_event(&trk[0], 4, P_ATK, 9);
++        (void)pb_select(0, 5); note(0, 2, 45);                      /* the project is saved on sequence 6 */
++        ok = project_save_as(0, "A") == 0 && project_used(0);
++        chain_defaults(&chain_config);
++        for (i = 0; i < 4u; i++) {
++            static const uint8_t pick[4] = {0, 1, 3, 6};            /* (as saved, the 1st, the 3rd, the 6th: the one saved on) */
++            for (t = 0; t < NTRK; t++) chain_config.row[i].slot[t] = CH_MAKE(t ? CHAIN_SILENT : 0u, 0u);
++            chain_config.row[i].slot[0] = CH_MAKE(0u, pick[i]);
++            chain_config.row[i].repeat = 1;
++        }
++        chain_config.count = 4;
++        ok &= chain_valid(&chain_config) && chain_prepare() == 0;
++        ok &= chain.src[0][0] == 0 && chain.src[1][0] == 8 && chain.src[2][0] == 9 && chain.src[3][0] == 0 && chain.src[0][1] == CHAIN_SILENT;
++        chain.running = 1;
++        chain.row = 0; chain_apply();
++        ok &= chain.lane[0] == 0 && chain.alt[0] == CHAIN_NOALT && seq_steps(&trk[0]) == chain.source[0].step[0];
++        ok &= seq_steps(&trk[0])[2].n == 1 && seq_steps(&trk[0])[2].note[0] == 45;           /* as saved: the 6th (the record's) */
++        chain.row = 1; chain_apply();
++        ok &= chain.lane[0] == 0 && chain.alt[0] == 0 && seq_steps(&trk[0]) == chain_alt[0].step &&
++              seq_steps(&trk[0])[0].n == 1 && seq_steps(&trk[0])[0].note[0] == 40 && seq_steps(&trk[0])[2].n == 0;
++        chain.row = 2; chain_apply();
++        ok &= chain.alt[0] == 1 && seq_steps(&trk[0])[1].note[0] == 42 && trk[0].p[P_SLEN] == 8 &&
++              chain_motion(&trk[0]) == &chain_alt[1].motion && chain_alt[1].motion.count == 1;
++        chain.row = 3; chain_apply();
++        ok &= chain.alt[0] == CHAIN_NOALT && seq_steps(&trk[0])[2].note[0] == 45;            /* the saved one is the slot's */
++        chain.running = 0; chain.armed = 0; transport_req = 0;
++        bad += check("SONG: a lane's chosen sequence is read from its project's store; the saved one is the slot's own", ok);
++        /* the live sequences are untouched by all that */
++        ok = pb_cur[0] == 5 && has(0, 2, 45);
++        bad += check("SONG: the playing sequences and their steps stay as they were", ok);
++        /* more sequences than the song holds */
++        for (i = 0; i < 8u; i++) chain_config.row[i].slot[0] = CH_MAKE(0u, (i % 8u) + 1u);
++        chain_config.count = 8;
++        ok = chain_prepare() == 16u;
++        for (i = 0; i < 7u; i++) chain_config.row[i].slot[0] = CH_MAKE(0u, i < 5u ? i + 1u : 0u);
++        chain_config.count = 7;
++        ok &= chain_prepare() == 0 && !chain.running;
++        chain.armed = 0; transport_req = 0;
++        chain_config.row[0].slot[0] = CH_MAKE(0u, 9u);                                      /* a sequence past the 8th: no song */
++        ok &= !chain_valid(&chain_config);
++        bad += check("SONG: more than CHAIN_ALT chosen sequences: TOO MANY (16); one past the 8th: not a song", ok);
++        /* a project saved without the store (or with it lost): the chosen sequence is empty, the song still plays */
++        for (q = 0; q < 2u; q++)
++            memset(nor + OBJ_PB_BASE + PB_META_O * 2u * ST_SECTOR + q * ST_SECTOR, 0, ST_SECTOR);
++        chain_config.row[0].slot[0] = CH_MAKE(0u, 2u);
++        chain_config.count = 1;
++        ok = chain_prepare() == 0 && chain.src[0][0] == 8 && chain_alt[0].step[0].n == 0 && chain_alt[0].timing[0] == TP[P_SLEN].def;
++        chain.armed = 0; transport_req = 0;
++        bad += check("SONG: a lost store: the chosen sequence is empty, the song plays", ok);
++    }
++
 +    printf(bad ? "patbank test FAILED\n" : "patbank test passed\n");
 +    return bad != 0;
 +}
@@ -1704,7 +2341,7 @@ index 01afa55..bcefd6e 100755
              build/piano_hd/PIANO_HD build/sample_demo
      else
 diff --git a/tests/ui_render.c b/tests/ui_render.c
-index a6618b2..dbcee69 100644
+index a6618b2..ad4983c 100644
 --- a/tests/ui_render.c
 +++ b/tests/ui_render.c
 @@ -763,7 +763,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
@@ -1712,7 +2349,7 @@ index a6618b2..dbcee69 100644
         S_LEARN_WAIT, S_LEARN_PICK, S_LEARN_SET, S_LEARN_LONG, S_GLO_LEARN, S_MENU_LCLEAR, S_MENU_LCLEAR_NONE,
         S_DLY_DOT, S_DLY_DOT16, S_FX_THROW,
 -       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_COUNT };
-+       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_SEQUENCE, S_SEQUENCE_FULL, S_SEQUENCE_NEXT, S_COUNT };
++       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_SEQUENCE, S_SEQUENCE_FULL, S_SEQUENCE_NEXT, S_SONG_LANES_SEQ, S_SEQUENCE_CHAIN, S_COUNT };
  static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
      "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
      "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -1721,18 +2358,40 @@ index a6618b2..dbcee69 100644
      "learn_wait", "learn_pick", "learn_set", "learn_long", "layer_glo_learn", "menu_learn_clear", "menu_learn_clear_none",
      "dly_dotted", "dly_dotted_16", "perform_throw",
 -    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail"};
-+    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail", "sequence", "sequence_full", "sequence_next"};
++    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail", "sequence", "sequence_full", "sequence_next", "song_lanes_seq", "sequence_chain"};
  
  /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
   * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
-@@ -1175,6 +1175,26 @@ static void setup(int s)
+@@ -1028,7 +1028,7 @@ static void setup(int s)
+     /* 1.2: SONG's lanes (ui_graph.c graph_song): four lanes, runs of one slot merged, "-" gaps, the cell selected (section
+      * 3, T2); playing (section 2, its playhead across the lanes); the cursor on a "-" cell (T1 silent in section 2: the
+      * section counts T2's loop) */
+-    case S_SONG_LANES: case S_SONG_LANES_PLAYING: case S_SONG_LANES_SILENT: {
++    case S_SONG_LANES: case S_SONG_LANES_PLAYING: case S_SONG_LANES_SILENT: case S_SONG_LANES_SEQ: {
+         static const uint8_t R[5][5] = {{0, 0, 2, 1, 2}, {4, 0, 2, 1, 1}, {1, 1, 4, 1, 4}, {1, 0, 4, 3, 1}, {0, 0, 2, 4, 2}};
+         uint32_t k;
+         song.playing = 0;
+@@ -1036,6 +1036,9 @@ static void setup(int s)
+         chain_config.count = 5;
+         for (k = 0; k < 5u; k++) chain_config.row[k] = (chain_row_t){{R[k][0], R[k][1], R[k][2], R[k][3]}, R[k][4]};
+         ui.song_row = s == S_SONG_LANES_SILENT ? 1 : 2; ui.song_trk = s == S_SONG_LANES_SILENT ? 0 : 1;
++        if (s == S_SONG_LANES_SEQ)                      /* 1.6: sequences chosen: B on T2 plays its 4th, T1 of section 3 its 2nd */
++            chain_config.row[2].slot[1] = CH_MAKE(CH_SLOT(chain_config.row[2].slot[1]), 4u),
++            chain_config.row[2].slot[0] = CH_MAKE(CH_SLOT(chain_config.row[2].slot[0]), 2u);
+         go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
+         if (s == S_SONG_LANES_PLAYING) {
+             chain_prepare(); events_block(32);
+@@ -1175,6 +1178,32 @@ static void setup(int s)
          song.playing = 1; ui.layer = LAYER_FX;
          perf_held = perf_act = PF_BIT(PF_RTHR) | PF_BIT(PF_ETHR);
          break;
 +    case S_SEQUENCE:                                   /* 1.6 SEQ > SEQUENCE: T1 plays 3 (of 1, 3, 4 with notes), T3 plays 2, T4 8 */
 +    case S_SEQUENCE_FULL:
++    case S_SEQUENCE_CHAIN:
 +    case S_SEQUENCE_NEXT: {
 +        uint32_t t, q;
++        memset(pb_next, 0, sizeof pb_next); memset(pb_start, 0, sizeof pb_start); memset(pb_chain, 0, sizeof pb_chain);
++        ui_prefs2 &= (uint8_t)~(PREF_SEQ_END >> 16); song.playing = 0;
 +        for (t = 0; t < NTRK; t++)
 +            for (q = 0; q < PB_N; q++) {
 +                if (!(s == S_SEQUENCE_FULL || (t == 0u && (q == 0u || q == 2u || q == 3u)) || (t == 2u && q == 1u)))
@@ -1742,6 +2401,9 @@ index a6618b2..dbcee69 100644
 +            }
 +        (void)pb_select(0, 2); (void)pb_select(2, 1); (void)pb_select(3, 7);
 +        song.sel = s == S_SEQUENCE_FULL ? 3 : 0;
++        if (s == S_SEQUENCE_CHAIN) {                   /* 1.6 CHAIN: T1 chains 4 from its 3rd, T3 2 from its 2nd (PRESETS) */
++            song.sel = 0; (void)pb_set_chain(0, 4); song.sel = 2; (void)pb_set_chain(2, 2);
++        }
 +        if (s == S_SEQUENCE_NEXT) {                    /* SEQ SWITCH END, playing: T1 and T3 wait (for 6 and 1) */
 +            ui_prefs2 |= (uint8_t)(PREF_SEQ_END >> 16); song.playing = 1;
 +            (void)pb_request(0, 5); (void)pb_request(2, 0);
@@ -1753,7 +2415,7 @@ index a6618b2..dbcee69 100644
          ui.menu = 3; ui.menu_sel = MI_INFO; song.cpu_q8 = 87u;   /* (34 %; USB: the host has none, OFF) */
          info.t = fm1_ms - INFO_CPU_MS;
 diff --git a/tests/ui_test.c b/tests/ui_test.c
-index c66050f..86bbaac 100644
+index c66050f..5ff0bb4 100644
 --- a/tests/ui_test.c
 +++ b/tests/ui_test.c
 @@ -154,6 +154,7 @@ static struct { uint32_t stage; } felucca_dbg;
@@ -1777,7 +2439,16 @@ index c66050f..86bbaac 100644
                   mtab_rows(MTAB_MIDI) == 2u && MI_TAB[MI_LCLEAR] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u && MI_TAB[MI_TUNE] == MTAB_AUDIO &&   /* (1.5: LEARN CLEAR, HELP) */
                   MI_TAB[MI_MIDIIN] == MTAB_MIDI && MI_TAB[MI_INFO] == MTAB_SYSTEM && MI_INFO >= MI_VALUES);
  
-@@ -2674,7 +2675,7 @@ static int test_page_cycles(void)
+@@ -2610,6 +2611,8 @@ static int test_presets_knob(void)
+                 sel_ok &= same_snd && same_steps && ui.page == i && ui.ev_row == 1u;
+             } else if (g == GR_TOOLS) {
+                 tools_ok &= same_snd && same_steps && !ui.confirm;
++            } else if (g == GR_SEQS) {                 /* (1.6 SEQUENCE: PRESETS = CHAIN, the sound stays; test_seq_chain_knob) */
++                sel_ok &= same_snd && same_steps && ui.page == i;
+             } else {
+                 snd_ok &= !same_snd && same_steps && ui.page == i && !ui.home;
+                 hold(B_SAVE);
+@@ -2674,7 +2677,7 @@ static int test_page_cycles(void)
      ok = 1;
      for (i = 0; i < NPAGES; i++) {                       /* every page in a family its button reaches, and its LED */
          uint32_t f = PAGES[i].fam;
@@ -1786,7 +2457,7 @@ index c66050f..86bbaac 100644
          ok &= f != FAM_GLO || PAGES[i].graph == GR_SONG;   /* (1.2: GLO's only page) */
          ok &= f != FAM_TRK || PAGES[i].graph == GR_TRK || str_eq(PAGES[i].title, "CLOCK");   /* HOME's: MIXER CLOCK */
          ok &= PAGES[i].graph != GR_TRK || f == FAM_TRK;
-@@ -2684,7 +2685,7 @@ static int test_page_cycles(void)
+@@ -2684,7 +2687,7 @@ static int test_page_cycles(void)
      }
      for (i = 0; i < NPAGES; i++)
          ok &= !str_eq(PAGES[i].title, "PATTERN") && !str_eq(PAGES[i].title, "CHANCE") && !str_eq(PAGES[i].title, "AUTO LIST");
@@ -1795,7 +2466,7 @@ index c66050f..86bbaac 100644
                   "(their LED HOME)", ok);
      {   /* 1.2: GLOBAL and SYSTEM are gone; their knobs: BPM SWG CLK on HOME > CLOCK, TUNE and ROUT on no page (the MENU's),
           * MIDI SYNC CPU on none (INFO shows the USB state and the CPU) */
-@@ -6592,15 +6593,19 @@ static int test_seq_tools(void)
+@@ -6592,15 +6595,19 @@ static int test_seq_tools(void)
      press(B_SEQ); frames(320);
      ok &= cur_page()->graph == GR_EVENTS && str_eq(cur_page()->title, "AUTOMATION");
      press(B_SEQ); frames(320);
@@ -1817,7 +2488,7 @@ index c66050f..86bbaac 100644
      go_home(); frame();
      for (k = 0; k < NPAGES; k++)                        /* a remembered page that is no SEQ page any more: STEP */
          if (PAGES[k].graph == GR_SONG) ui.fam_last[FAM_SEQ] = (uint8_t)k;
-@@ -6756,12 +6761,12 @@ static int test_seq_tools(void)
+@@ -6756,12 +6763,12 @@ static int test_seq_tools(void)
      ok &= !tl_lanes_of(TSEL, DV_SNARE) && tl_lanes_of(TSEL, DV_HATC) == 0x5555u && msg_is("SNARE CLEARED");
      ui.lane = DV_TOM;
      rng_state = 77u;
@@ -1834,7 +2505,7 @@ index c66050f..86bbaac 100644
      btn_up(B_SEQ); frame();
      ui_power_on();
      tl_melody();
-@@ -6949,7 +6954,7 @@ static int test_layer_lock(void)
+@@ -6949,7 +6956,7 @@ static int test_layer_lock(void)
      btn_down(B_SEQ); frames(500);
      ok &= ui.layer == LAYER_SEQ && !ui.lock;
      btn_up(B_SEQ); frame();
@@ -1843,7 +2514,7 @@ index c66050f..86bbaac 100644
      press(B_GLO); frames(400);
      ok &= str_eq(cur_page()->title, "SONG") && !ui.lock;
      press(B_GLO);
-@@ -9017,6 +9022,34 @@ static int help_fits(const char *s)
+@@ -9017,6 +9024,73 @@ static int help_fits(const char *s)
      if (!ok || w > 224) printf("  help: \"%s\" %u hints, %d px of 224\n", s, n, w);
      return ok && w <= 224;
  }
@@ -1872,13 +2543,52 @@ index c66050f..86bbaac 100644
 +    menu_put(MI_SEQSW, 0);
 +    song.playing = 0;
 +    bad += check("1.6 SEQUENCE, SEQ SWITCH END: the knob steps from the waiting sequence (far ones reachable), the last step switches", ok);
++    /* PRESETS on SEQUENCE: how many sequences chain from the selected track's (not the sound) */
++    ui_power_on();
++    go_title("SEQUENCE"); frame();
++    {
++        uint32_t snd = TSEL->preset, sel = song.sel;
++        ok = cur_page()->graph == GR_SEQS;
++        turn(EN_PRESET, 1); frames(4);
++        ok &= pb_run(sel) == 2 && TSEL->preset == snd;
++        turn(EN_PRESET, 2); frames(4);
++        ok &= pb_run(sel) == 4;
++        turn(EN_PRESET, 20); frames(4);
++        ok &= pb_run(sel) == PB_N - pb_start[sel];
++        turn(EN_PRESET, -20); frames(4);
++        ok &= pb_run(sel) == 1 && !pb_chain[sel];
++        turn(EN_K2, 0);
++        bad += check("1.6 SEQUENCE: PRESETS sets the chain's length (1..8 from the first), the sound stays", ok);
++    }
++    /* SONG: PRESETS turns the sequence the selected cell plays (it was KNOB 1's twin); KNOB 3 (the project) resets it */
++    ui_power_on();
++    chain_defaults(&chain_config);
++    chain_config.count = 1; chain_config.row[0].repeat = 1; chain_config.row[0].slot[0] = CH_MAKE(1u, 0u);
++    ui.song_row = 0; ui.song_trk = 0;
++    go_title("SONG"); frame();
++    ok = cur_page()->graph == GR_SONG;
++    turn(EN_PRESET, 1); frames(4);
++    ok &= CH_SLOT(chain_config.row[0].slot[0]) == 1u && CH_SEQ(chain_config.row[0].slot[0]) == 1u && ui.song_row == 0;
++    turn(EN_PRESET, 20); frames(4);
++    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 8u;
++    turn(EN_PRESET, -3); frames(4);
++    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 5u && chain_valid(&chain_config);
++    turn(EN_K3, 1); frames(4);                                  /* the project: C, its saved sequence */
++    ok &= CH_SLOT(chain_config.row[0].slot[0]) == 2u && CH_SEQ(chain_config.row[0].slot[0]) == 0u;
++    turn(EN_PRESET, 2); turn(EN_K3, 0); frames(4);
++    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 2u;
++    chain_config.row[0].slot[0] = CH_MAKE(CHAIN_SILENT, 0u);    /* a silent cell: no sequence */
++    turn(EN_PRESET, 1); frames(4);
++    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 0u;
++    chain_defaults(&chain_config);
++    bad += check("1.6 SONG: PRESETS turns the cell's sequence (0 = as saved .. 8), KNOB 3 resets it, a silent cell has none", ok);
 +    return bad;
 +}
 +
  static int test_help(void)
  {
      int bad = 0, ok;
-@@ -9643,6 +9676,7 @@ int main(void)
+@@ -9643,6 +9717,7 @@ int main(void)
      bad += test_home_tracks();
      bad += test_fx_map_columns();
      bad += test_help();

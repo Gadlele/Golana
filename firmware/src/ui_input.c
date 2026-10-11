@@ -479,6 +479,36 @@ static void seqs_edit(uint32_t slot, int32_t steps)
     seq_switch_ui(slot % NTRK, (uint32_t)clamp(n, 0, (int32_t)PB_N - 1));
 }
 #endif
+#if FELUCCA_PATBANK
+/* SONG: PRESETS turns the sequence the selected cell plays (its project's): 0 the one the project was saved on, 1..8 that one */
+static void song_seq_edit(int32_t steps)
+{
+    uint8_t *b;
+    uint32_t s, q;
+    char n[2] = {0, 0}, a[8] = "A SEQ ";
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    }
+    if (ui.song_row >= chain_config.count || ui.song_row >= CHAIN_ROWS)
+        return;
+    b = &chain_config.row[ui.song_row].slot[ui.song_trk % NTRK];
+    s = CH_SLOT(*b);
+    if (s >= 4u) {
+        ui_message("SILENT: NO SEQ");
+        return;
+    }
+    q = (uint32_t)clamp((int32_t)CH_SEQ(*b) + steps, 0, (int32_t)PB_N);
+    *b = CH_MAKE(s, q);
+    a[0] = (char)('A' + s);
+    n[0] = (char)('0' + q);
+    if (q)
+        ui_say(a, n);
+    else
+        ui_say(a, "AS SAVED");
+    ui.force = 1;
+}
+#endif
 static void tracks_edit(uint32_t slot, int32_t steps)
 {
     track_t *t = TSEL;
@@ -541,7 +571,10 @@ static void song_keys(uint32_t notes)
             if (chain_config.count == 1u)
                 chain_config.row[0] = chain_row_of((uint32_t)s, 1);
         }
-        chain_config.row[ui.song_row].slot[ui.song_trk % NTRK] = (uint8_t)s;
+        {
+            uint8_t *lb = &chain_config.row[ui.song_row].slot[ui.song_trk % NTRK];
+            *lb = CH_MAKE(s, CH_SLOT(*lb) == (uint32_t)s ? CH_SEQ(*lb) : 0u);      /* (another slot: its saved sequence) */
+        }
         ui.force = 1;
     }
 }
@@ -549,7 +582,7 @@ static void song_keys(uint32_t notes)
 static uint32_t song_leds(void)
 {
     uint32_t k, s;
-    if (ui.song_row >= chain_config.count || (s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) >= 4u)
+    if (ui.song_row >= chain_config.count || (s = CH_SLOT(chain_config.row[ui.song_row].slot[ui.song_trk % NTRK])) >= 4u)
         return 0;
     for (k = 0; k < 27u; k++)
         if (song_key(k) == (int32_t)s)
@@ -942,9 +975,10 @@ static void edit_param(uint32_t slot, int32_t steps)
             if (slot == 2u) return;
         }
         r = &chain_config.row[ui.song_row];
-        if (slot == 2u)
-            r->slot[ui.song_trk % NTRK] = (uint8_t)clamp((int32_t)r->slot[ui.song_trk % NTRK] + steps, 0, CHAIN_SILENT);
-        else
+        if (slot == 2u) {
+            uint32_t ns = (uint32_t)clamp((int32_t)CH_SLOT(r->slot[ui.song_trk % NTRK]) + steps, 0, CHAIN_SILENT);
+            r->slot[ui.song_trk % NTRK] = CH_MAKE(ns, ns == CH_SLOT(r->slot[ui.song_trk % NTRK]) ? CH_SEQ(r->slot[ui.song_trk % NTRK]) : 0u);
+        } else
             r->repeat = (uint8_t)clamp((int32_t)r->repeat + steps, 1, 16);
         return;
     }
@@ -1242,6 +1276,16 @@ static void presets_turn(int32_t s)
         nudge_turn(held, s);
         return;
     }
+#if FELUCCA_PATBANK
+    if (!ui.home && g == GR_SEQS) {                       /* SEQ > SEQUENCE: PRESETS = CHAIN (the selected track's) */
+        seq_chain_ui(song.sel, s);
+        return;
+    }
+    if (!ui.home && g == GR_SONG) {                       /* SONG: PRESETS = the cell's sequence (KNOB 1 is the section) */
+        song_seq_edit(s);
+        return;
+    }
+#endif
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
     } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_PATS || g == GR_SONG || g == GR_EVENTS) {

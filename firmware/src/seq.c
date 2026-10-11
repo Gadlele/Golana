@@ -1007,6 +1007,8 @@ static int32_t seq_nudge(const track_t *t, const step_t *s)
 static const motion_store_t *chain_motion(const track_t *t)
 {
     uint32_t s = chain.lane[trk_index(t)];
+    if (chain.running && s < 4u && chain.alt[trk_index(t)] != CHAIN_NOALT)
+        return &chain_alt[chain.alt[trk_index(t)]].motion;
     return !chain.running ? &motion : s < 4u ? &chain.source[s].motion : 0;
 }
 

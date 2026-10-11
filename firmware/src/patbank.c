@@ -30,7 +30,11 @@ static uint8_t pb_len[PB_NSEQ];          /* LEN of each (the playing one's is th
 static uint8_t pb_pat[PB_NSEQ][PB_PAT_B] __attribute__((section(".pool")));
 static pb_mo_t pb_mo[PB_NSEQ] __attribute__((section(".pool")));   /* (the playing sequence's: motion) */
 static uint8_t pb_next[NTRK];            /* a switch waiting for the end of the sequence playing: the slot + 1, 0 none (SEQ SWITCH END) */
-static uint8_t pb_last[NTRK];            /* the step each track was on when pb_poll last looked */
+static uint8_t pb_last[NTRK];            /* the step each track was on when pb_due last looked */
+static uint8_t pb_fired[NTRK];           /* a switch happened on this pass's last step: not again until the pass is under way */
+static uint8_t pb_start[NTRK];           /* CHAIN: the sequence a track's chain starts from (the one last chosen) */
+static uint8_t pb_chain[NTRK];           /* CHAIN: how many sequences, from pb_start, play one after the other (0, 1: none) */
+static uint8_t pb_keep;                  /* pb_select called by the chain: pb_start stays */
 static uint8_t pb_ready;
 static uint8_t pb_dirty;                 /* bit o: the live store's object o is older than the mirror */
 static uint32_t pb_gen;                  /* + 1 per change (autosave_sig) */
@@ -100,6 +104,10 @@ static void pb_clear_all(void)
     memset(pb_mo, 0, sizeof pb_mo);
     memset(pb_cur, 0, sizeof pb_cur);
     memset(pb_next, 0, sizeof pb_next);
+    memset(pb_start, 0, sizeof pb_start);
+    memset(pb_chain, 0, sizeof pb_chain);
+    memset(pb_fired, 0, sizeof pb_fired);
+    memset(pb_last, 0, sizeof pb_last);
     for (q = 0; q < PB_NSEQ; q++)
         pb_len[q] = (uint8_t)TP[P_SLEN].def;
     pb_ready = 1;
@@ -192,9 +200,43 @@ static int pb_select(uint32_t t, uint32_t slot)
     motion_unguard(f);
     pb_cur[t] = (uint8_t)slot;
     pb_next[t] = 0;
+    if (!pb_keep)
+        pb_start[t] = (uint8_t)slot;              /* (a sequence chosen starts a chain from it) */
     pb_dirty |= (uint8_t)(1u << (q / PB_PER) | 1u << (old / PB_PER) | 1u << PB_META_O);
     pb_gen++;
     return 0;
+}
+
+/* CHAIN: a track's sequences pb_start .. pb_start + n - 1 play one after the other (the last one back to the first), a
+ * sequence at the end of each pass of the one playing; n 0 or 1: no chain. The sequence last chosen is the first. A chain is
+ * whole sequences of 1..64 steps each: 8 x 64 steps at most */
+static uint32_t pb_run(uint32_t t)
+{
+    uint32_t n = pb_chain[t % NTRK] ? pb_chain[t % NTRK] : 1u, a = pb_start[t % NTRK];
+    return a + n > PB_N ? PB_N - a : n;
+}
+static uint32_t pb_set_chain(uint32_t t, uint32_t n)   /* the length it got (1: off) */
+{
+    uint32_t a;
+    t %= NTRK;
+    pb_need();
+    a = pb_start[t];
+    n = n < 1u ? 1u : n > PB_N - a ? PB_N - a : n;
+    if (n != pb_run(t) || pb_chain[t] != (uint8_t)n) {
+        pb_chain[t] = (uint8_t)(n > 1u ? n : 0u);
+        pb_dirty |= 1u << PB_META_O;
+        pb_gen++;
+    }
+    return n;
+}
+static int pb_chain_next(uint32_t t)                   /* the sequence after the one playing; -1 no chain */
+{
+    uint32_t n = pb_run(t), a = pb_start[t], c = pb_cur[t];
+    if (n < 2u)
+        return -1;
+    if (c < a || c >= a + n)
+        return (int)a;
+    return (int)(c + 1u < a + n ? c + 1u : a);
 }
 
 /* the sequence a knob step starts from: the one waiting (SEQ SWITCH END) if there is one, else the one playing. Stepping from
@@ -224,21 +266,39 @@ static int pb_request(uint32_t t, uint32_t s)
     rc = pb_select(t, s);
     return rc ? -rc : 0;
 }
-/* main loop, every pass, per track: its waiting switch happens on the last step of the sequence playing (the next step is
- * the new one's first), at once when the music is stopped, and late (a wrap seen) when a pass missed the last step.
- * 1 switched, 0 nothing (yet), < 0 pb_select's rc, negated (the switch is dropped) */
+/* main loop, every pass, per track: at the end of the sequence playing, a waiting switch (SEQ SWITCH END) or else the next
+ * sequence of the chain happens: on the last step (the next step is the new one's first), at once for a waiting one when
+ * the music is stopped, and late (a wrap seen) when a pass missed the last step. 1 switched, 0 nothing (yet), < 0
+ * pb_select's rc, negated (the switch is dropped) */
 static int pb_due(uint32_t t)
 {
     const track_t *tr = &trk[t];
-    uint32_t idx = tr->seq_idx, run = song.playing && tr->seq_pos < 0x7FFFFFFFu, last = pb_last[t];
-    int rc;
+    uint32_t idx = tr->seq_idx, run = song.playing && tr->seq_pos < 0x7FFFFFFFu, last = pb_last[t], at_end;
+    int rc, nx;
     pb_last[t] = (uint8_t)idx;
-    if (!pb_next[t])
+    if (!run)
+        pb_fired[t] = 0;                                /* (stopped: the next start is a new pass) */
+    if (pb_fired[t]) {                                  /* this boundary was handled: wait for the pass to be under way */
+        if (idx + 1u < (uint32_t)tr->p[P_SLEN])
+            pb_fired[t] = 0;
         return 0;
-    if (run && idx + 1u < (uint32_t)tr->p[P_SLEN] && idx >= last)
+    }
+    at_end = run && (idx + 1u >= (uint32_t)tr->p[P_SLEN] || idx < last);
+    if (pb_next[t]) {
+        if (run && !at_end)
+            return 0;
+        rc = pb_select(t, (uint32_t)pb_next[t] - 1u);
+        pb_next[t] = 0;
+        pb_fired[t] = (uint8_t)run;
+        return rc ? -rc : 1;
+    }
+    nx = at_end ? pb_chain_next(t) : -1;
+    if (nx < 0)
         return 0;
-    rc = pb_select(t, (uint32_t)pb_next[t] - 1u);
-    pb_next[t] = 0;
+    pb_keep = 1;
+    rc = pb_select(t, (uint32_t)nx);
+    pb_keep = 0;
+    pb_fired[t] = 1;
     return rc ? -rc : 1;
 }
 

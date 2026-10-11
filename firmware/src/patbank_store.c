@@ -28,6 +28,9 @@ static uint32_t pb_build(uint32_t o)
     uint32_t n = pb_obj_pats(o), pos = PB_HDR, q;
     memset(pb_wire, 0, PB_HDR);
     pb_wire[0] = 'P'; pb_wire[1] = 'B'; pb_wire[2] = 1; pb_wire[3] = (uint8_t)o;
+    if (o == PB_META_O)                                 /* CHAIN: per track start (3 bits) and length - 1 (3 bits) */
+        for (q = 0; q < NTRK; q++)
+            pb_wire[4u + q] = (uint8_t)(pb_start[q] << 3 | (pb_run(q) - 1u));
     memcpy(pb_wire + pos, pb_pat[o * PB_PER], n * PB_PAT_B);
     pos += n * PB_PAT_B;
     if (o == PB_META_O) {
@@ -93,6 +96,11 @@ static int pb_store_load(uint32_t s)
         if (pos + tot * sizeof(motion_event_t) > n) return 0;
     }
     memcpy(pb_pat[PB_META_O * PB_PER], pb_wire + PB_HDR, 2u * PB_PAT_B);
+    for (t = 0; t < NTRK; t++) {                        /* CHAIN (the header bytes were 0 before it: start 1, no chain) */
+        uint32_t b = pb_wire[4u + t], a = (b >> 3) & 7u, n = (b & 7u) + 1u;
+        pb_start[t] = (uint8_t)a;
+        pb_chain[t] = (uint8_t)(n > 1u && a + n <= PB_N ? n : 0u);
+    }
     for (q = 0; q < PB_NSEQ; q++) {
         uint32_t k;
         pb_mo[q].count = 0;
@@ -119,6 +127,60 @@ static int pb_store_load(uint32_t s)
     pb_dirty = 0x3Fu;
     pb_gen++;
     return 1;
+}
+
+
+/* A song (song_chain.c, project.c chain_prepare) plays other projects' sequences: store s's sequence the project was saved on
+ * for each track (its record plays that one); 0 when there is no such store (the record's is "sequence 1") */
+static int pb_store_saved(uint32_t s, uint8_t *cur)
+{
+    uint32_t n, t;
+    memset(cur, 0, NTRK);
+    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + PB_META_O, pb_wire, sizeof pb_wire);
+    if ((int)n < 0 || n < PB_META_FIX || pb_wire[0] != 'P' || pb_wire[1] != 'B' || pb_wire[2] != 1 || pb_wire[3] != PB_META_O)
+        return 0;
+    for (t = 0; t < NTRK; t++)
+        cur[t] = pb_wire[PB_HDR + 2u * PB_PAT_B + t] < PB_N ? pb_wire[PB_HDR + 2u * PB_PAT_B + t] : 0u;
+    return 1;
+}
+/* store s's sequence q of track k, for a song: its steps (st, NSTEP), LEN and automation (mo: the track's records). 0 done;
+ * 1 no such store or object (the sequence is empty, LEN the default) */
+static int pb_store_fetch(uint32_t s, uint32_t k, uint32_t q, step_t *st, uint8_t *len, pb_mo_t *mo)
+{
+    uint32_t n, qi = k * PB_N + q, pos, o, i, skip = 0, cnt;
+    uint8_t cur[NTRK];
+    for (i = 0; i < NSTEP; i++)
+        step_clear(&st[i]);
+    *len = (uint8_t)TP[P_SLEN].def;
+    memset(mo, 0, sizeof *mo);
+    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + PB_META_O, pb_wire, sizeof pb_wire);
+    if ((int)n < 0 || n < PB_META_FIX || pb_wire[0] != 'P' || pb_wire[1] != 'B' || pb_wire[2] != 1 || pb_wire[3] != PB_META_O)
+        return 1;
+    (void)cur;
+    pos = PB_HDR + 2u * PB_PAT_B + NTRK;
+    if (pb_wire[pos + qi] >= (uint32_t)TP[P_SLEN].min && pb_wire[pos + qi] <= (uint32_t)TP[P_SLEN].max)
+        *len = pb_wire[pos + qi];
+    pos += PB_NSEQ;                                      /* the (count, ON) pairs, then the records of those with some */
+    for (i = 0; i < qi; i++)
+        skip += pb_wire[pos + 2u * i];
+    cnt = pb_wire[pos + 2u * qi];
+    if (cnt && cnt <= PB_MO_MAX && pos + 2u * PB_NSEQ + (skip + cnt) * sizeof(motion_event_t) <= n) {
+        memcpy(mo->ev, pb_wire + pos + 2u * PB_NSEQ + skip * sizeof(motion_event_t), cnt * sizeof(motion_event_t));
+        mo->count = (uint8_t)cnt;
+        mo->on = pb_wire[pos + 2u * qi + 1u] != 0u;
+    }
+    if (qi >= PB_META_O * PB_PER) {                      /* the last two sequences are in the meta object itself */
+        /* (pb_wire holds it: read in place) */
+        if (n >= PB_HDR + (qi - PB_META_O * PB_PER + 1u) * PB_PAT_B)
+            (void)pb_unpack_pat(st, pb_wire + PB_HDR + (qi - PB_META_O * PB_PER) * PB_PAT_B);
+        return 0;
+    }
+    o = qi / PB_PER;
+    n = (uint32_t)st_load(OBJ_PB0 + s * PB_NOBJ + o, pb_wire, sizeof pb_wire);
+    if ((int)n == (int)(PB_HDR + PB_PER * PB_PAT_B) && pb_wire[0] == 'P' && pb_wire[1] == 'B' && pb_wire[2] == 1 &&
+        pb_wire[3] == o)
+        (void)pb_unpack_pat(st, pb_wire + PB_HDR + (qi % PB_PER) * PB_PAT_B);
+    return 0;
 }
 
 /* the autosave's companion (project.c autosave_poll): the live store, the objects that changed; 0 ok */

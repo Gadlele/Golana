@@ -883,9 +883,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         for (i = 0; i < chain_config.count; i++) {
             const chain_row_t *r = &chain_config.row[i];
             if (lanes)
-                for (k = 0; k < NTRK; k++) ed_b(r->slot[k]);
+                for (k = 0; k < NTRK; k++) ed_b(CH_SLOT(r->slot[k]));      /* (1.6: the sequences chosen stay on the device) */
             else                                         /* v6: the clock track's slot (every track "-": A) */
-                ed_b(r->slot[chain_clock(r)] < 4u ? r->slot[chain_clock(r)] : 0u);
+                ed_b(CH_SLOT(r->slot[chain_clock(r)]) < 4u ? CH_SLOT(r->slot[chain_clock(r)]) : 0u);
             ed_b(r->repeat);
         }
         break;

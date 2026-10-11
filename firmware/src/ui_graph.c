@@ -1010,7 +1010,7 @@ static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
 }
 static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section: its clock track's (1/48 quarters) */
 {
-    uint32_t k = chain_clock(r), s = r->slot[k];
+    uint32_t k = chain_clock(r), s = CH_SLOT(r->slot[k]);
     return s < 4u && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
 }
 static void song_layout(song_lay_t *L)
@@ -1895,7 +1895,7 @@ static void draw_seqs(void)
         uint32_t sel = c == song.sel, mask = 0, sig;
         for (r = 0; r < PB_N; r++)
             mask |= (uint32_t)pb_filled(c, r) << r;
-        sig = (mask | (uint32_t)pb_cur[c] << 8 | sel << 12 | (uint32_t)pb_next[c] << 16) * 2654435761u + 1u;
+        sig = (mask | (uint32_t)pb_cur[c] << 8 | sel << 12 | (uint32_t)pb_next[c] << 16 | (uint32_t)pb_start[c] << 20 | pb_run(c) << 24) * 2654435761u + 1u;
         if (!ui.force && sig == sqs_sig[c])
             continue;
         sqs_sig[c] = sig;
@@ -1908,6 +1908,8 @@ static void draw_seqs(void)
             uint16_t ink = on || nx ? T_INK : full ? (sel ? T_TEXT : T_MID) : T_DIM;
             char b[2] = {(char)('1' + r), 0};
             cv_rrect(0, y, CARD_W, 12, 3, fill, T_BG);
+            if (pb_run(c) > 1u && r >= pb_start[c] && r < pb_start[c] + pb_run(c))   /* a chained one: a bar at its left */
+                cv_rrect(3, y + 3, 3, 6, 1, on || nx ? T_INK : T_MID, fill);
             GFX_HOOK_ALIGN(0, y, CARD_W, y + 12, AL_HV, "sequence cell digit centred");
             cv_text_in(0, y + CAP_IN(S, 12), CARD_W, &AF_S, b, ink, fill);
         }
@@ -2153,8 +2155,8 @@ static void graph_song(void)
     }
     for (k = 0; k < NTRK; k++)                        /* the lanes: a block per run of one slot, "-" a faint line */
         for (i = 0; i < L.n; i = j) {
-            uint32_t s = chain_config.row[i].slot[k];
-            for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
+            uint32_t sb = chain_config.row[i].slot[k], s = CH_SLOT(sb);
+            for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == sb; j++)     /* (a run of one slot and one sequence) */
                 ;
             if (s < 4u) {
                 sg_block(&L, off, k, i, j, s, k == lane ? c : CHAIN_ROWS, sp);
@@ -2190,7 +2192,7 @@ static void graph_song(void)
         if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
             for (k = 0; k < NTRK; k++) {
-                uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
+                uint32_t s = c < L.n ? CH_SLOT(chain_config.row[c].slot[k]) : CHAIN_SILENT;
                 int on = k == lane && s < 4u && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
                 cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < NTRK ? SG_LG : 0), on ? T_INK : T_ACCENT);
@@ -2238,12 +2240,19 @@ static void graph_song(void)
         cv_text_on(x0, ly, fl, b, T_MID, T_SURF);
     }
     if (c < L.n) {
-        uint32_t s = chain_config.row[c].slot[lane];
+        uint32_t sb = chain_config.row[c].slot[lane], s = CH_SLOT(sb), sq = CH_SEQ(sb);
+        char nb[24];
         if (s >= 4u)
             cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
         else if (!graph_project_used(s))
             cv_free_text(SG_X0, ly, fl, "NOT SAVED", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (graph_project_name(s)[0])
+        else if (sq) {                                 /* 1.6: a sequence chosen: "NAME  SEQ 3" */
+            str_cpy(nb, graph_project_name(s), 14);
+            str_cpy(nb + str_len(nb), " SEQ ", 6);
+            nb[str_len(nb) + 1] = 0;
+            nb[str_len(nb)] = (char)('0' + sq);
+            cv_free_text(SG_X0, ly, fl, nb, T_MID, T_SURF, x0 - 10 - SG_X0);
+        } else if (graph_project_name(s)[0])
             cv_free_text(SG_X0, ly, fl, graph_project_name(s), T_MID, T_SURF, x0 - 10 - SG_X0);
     } else {                                           /* + ADD: how */
         for (i = 0; i < 4u && !graph_project_used(i); i++)

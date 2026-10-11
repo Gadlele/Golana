@@ -883,6 +883,7 @@ static void draw_columns(void)
     }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
+        char sq[3];
         int used = row < chain_config.count;
         fmt_int(val, (int32_t)row + 1);
         draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_X_SONG);
@@ -890,10 +891,13 @@ static void draw_columns(void)
         val[1] = (char)('1' + k);
         val[2] = 0;
         draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
-        sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
+        sl = used ? CH_SLOT(chain_config.row[row].slot[k]) : CHAIN_SILENT;
         if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
         else str_cpy(val, "--", sizeof val);
-        draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
+        sq[0] = 'S'; sq[1] = used && sl < 4u && CH_SEQ(chain_config.row[row].slot[k]) ?
+                (char)('0' + CH_SEQ(chain_config.row[row].slot[k])) : 0;   /* (1.6: the sequence chosen: "S3"; none: the saved one) */
+        sq[2] = 0;
+        draw_column(2, "PAT", val, sq[1] ? sq : "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
         if (used) fmt_int(val, chain_config.row[row].repeat);
         else str_cpy(val, "--", sizeof val);
         draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
@@ -994,11 +998,12 @@ static void draw_columns(void)
     }
 #if FELUCCA_PATBANK
     if (cur_page()->graph == GR_SEQS) {                /* SEQUENCE: the sequence (1..8) each track plays, KNOB 1..4 */
-        char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0};
+        char lb[3] = {'T', '1', 0}, sq[2] = {'1', 0}, cn[3] = {'x', '1', 0};   /* (cn: the chain's length) */
         for (c = 0; c < NTRK; c++) {
             lb[1] = (char)('1' + c);
             sq[0] = (char)('1' + pb_target(c));                 /* (a waiting switch: the one it waits for, "NEXT") */
-            draw_column(c, lb, sq, pb_next[c] ? "NEXT" : "/8", c == song.sel ? T_ACCENT : VAL(c),
+            cn[1] = (char)('0' + pb_run(c));
+            draw_column(c, lb, sq, pb_next[c] ? "NEXT" : pb_run(c) > 1u ? cn : "/8", c == song.sel ? T_ACCENT : VAL(c),
                         (int32_t)pb_target(c) * 1000 / 7, ICON_X_PATTERN);
         }
         return;

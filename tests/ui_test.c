@@ -2611,6 +2611,8 @@ static int test_presets_knob(void)
                 sel_ok &= same_snd && same_steps && ui.page == i && ui.ev_row == 1u;
             } else if (g == GR_TOOLS) {
                 tools_ok &= same_snd && same_steps && !ui.confirm;
+            } else if (g == GR_SEQS) {                 /* (1.6 SEQUENCE: PRESETS = CHAIN, the sound stays; test_seq_chain_knob) */
+                sel_ok &= same_snd && same_steps && ui.page == i;
             } else {
                 snd_ok &= !same_snd && same_steps && ui.page == i && !ui.home;
                 hold(B_SAVE);
@@ -9047,6 +9049,45 @@ static int test_seq_end_knob(void)
     menu_put(MI_SEQSW, 0);
     song.playing = 0;
     bad += check("1.6 SEQUENCE, SEQ SWITCH END: the knob steps from the waiting sequence (far ones reachable), the last step switches", ok);
+    /* PRESETS on SEQUENCE: how many sequences chain from the selected track's (not the sound) */
+    ui_power_on();
+    go_title("SEQUENCE"); frame();
+    {
+        uint32_t snd = TSEL->preset, sel = song.sel;
+        ok = cur_page()->graph == GR_SEQS;
+        turn(EN_PRESET, 1); frames(4);
+        ok &= pb_run(sel) == 2 && TSEL->preset == snd;
+        turn(EN_PRESET, 2); frames(4);
+        ok &= pb_run(sel) == 4;
+        turn(EN_PRESET, 20); frames(4);
+        ok &= pb_run(sel) == PB_N - pb_start[sel];
+        turn(EN_PRESET, -20); frames(4);
+        ok &= pb_run(sel) == 1 && !pb_chain[sel];
+        turn(EN_K2, 0);
+        bad += check("1.6 SEQUENCE: PRESETS sets the chain's length (1..8 from the first), the sound stays", ok);
+    }
+    /* SONG: PRESETS turns the sequence the selected cell plays (it was KNOB 1's twin); KNOB 3 (the project) resets it */
+    ui_power_on();
+    chain_defaults(&chain_config);
+    chain_config.count = 1; chain_config.row[0].repeat = 1; chain_config.row[0].slot[0] = CH_MAKE(1u, 0u);
+    ui.song_row = 0; ui.song_trk = 0;
+    go_title("SONG"); frame();
+    ok = cur_page()->graph == GR_SONG;
+    turn(EN_PRESET, 1); frames(4);
+    ok &= CH_SLOT(chain_config.row[0].slot[0]) == 1u && CH_SEQ(chain_config.row[0].slot[0]) == 1u && ui.song_row == 0;
+    turn(EN_PRESET, 20); frames(4);
+    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 8u;
+    turn(EN_PRESET, -3); frames(4);
+    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 5u && chain_valid(&chain_config);
+    turn(EN_K3, 1); frames(4);                                  /* the project: C, its saved sequence */
+    ok &= CH_SLOT(chain_config.row[0].slot[0]) == 2u && CH_SEQ(chain_config.row[0].slot[0]) == 0u;
+    turn(EN_PRESET, 2); turn(EN_K3, 0); frames(4);
+    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 2u;
+    chain_config.row[0].slot[0] = CH_MAKE(CHAIN_SILENT, 0u);    /* a silent cell: no sequence */
+    turn(EN_PRESET, 1); frames(4);
+    ok &= CH_SEQ(chain_config.row[0].slot[0]) == 0u;
+    chain_defaults(&chain_config);
+    bad += check("1.6 SONG: PRESETS turns the cell's sequence (0 = as saved .. 8), KNOB 3 resets it, a silent cell has none", ok);
     return bad;
 }
 

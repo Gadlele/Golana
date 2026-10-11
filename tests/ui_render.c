@@ -763,7 +763,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_ENV_SYNC, S_ENV_DEST_SYNC, S_FILTER,
        S_LEARN_WAIT, S_LEARN_PICK, S_LEARN_SET, S_LEARN_LONG, S_GLO_LEARN, S_MENU_LCLEAR, S_MENU_LCLEAR_NONE,
        S_DLY_DOT, S_DLY_DOT16, S_FX_THROW,
-       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_SEQUENCE, S_SEQUENCE_FULL, S_SEQUENCE_NEXT, S_COUNT };
+       S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL, S_SEQUENCE, S_SEQUENCE_FULL, S_SEQUENCE_NEXT, S_SONG_LANES_SEQ, S_SEQUENCE_CHAIN, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -790,7 +790,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "env_sync", "env_dest_sync", "filter",
     "learn_wait", "learn_pick", "learn_set", "learn_long", "layer_glo_learn", "menu_learn_clear", "menu_learn_clear_none",
     "dly_dotted", "dly_dotted_16", "perform_throw",
-    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail", "sequence", "sequence_full", "sequence_next"};
+    "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail", "sequence", "sequence_full", "sequence_next", "song_lanes_seq", "sequence_chain"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1028,7 +1028,7 @@ static void setup(int s)
     /* 1.2: SONG's lanes (ui_graph.c graph_song): four lanes, runs of one slot merged, "-" gaps, the cell selected (section
      * 3, T2); playing (section 2, its playhead across the lanes); the cursor on a "-" cell (T1 silent in section 2: the
      * section counts T2's loop) */
-    case S_SONG_LANES: case S_SONG_LANES_PLAYING: case S_SONG_LANES_SILENT: {
+    case S_SONG_LANES: case S_SONG_LANES_PLAYING: case S_SONG_LANES_SILENT: case S_SONG_LANES_SEQ: {
         static const uint8_t R[5][5] = {{0, 0, 2, 1, 2}, {4, 0, 2, 1, 1}, {1, 1, 4, 1, 4}, {1, 0, 4, 3, 1}, {0, 0, 2, 4, 2}};
         uint32_t k;
         song.playing = 0;
@@ -1036,6 +1036,9 @@ static void setup(int s)
         chain_config.count = 5;
         for (k = 0; k < 5u; k++) chain_config.row[k] = (chain_row_t){{R[k][0], R[k][1], R[k][2], R[k][3]}, R[k][4]};
         ui.song_row = s == S_SONG_LANES_SILENT ? 1 : 2; ui.song_trk = s == S_SONG_LANES_SILENT ? 0 : 1;
+        if (s == S_SONG_LANES_SEQ)                      /* 1.6: sequences chosen: B on T2 plays its 4th, T1 of section 3 its 2nd */
+            chain_config.row[2].slot[1] = CH_MAKE(CH_SLOT(chain_config.row[2].slot[1]), 4u),
+            chain_config.row[2].slot[0] = CH_MAKE(CH_SLOT(chain_config.row[2].slot[0]), 2u);
         go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
         if (s == S_SONG_LANES_PLAYING) {
             chain_prepare(); events_block(32);
@@ -1177,8 +1180,11 @@ static void setup(int s)
         break;
     case S_SEQUENCE:                                   /* 1.6 SEQ > SEQUENCE: T1 plays 3 (of 1, 3, 4 with notes), T3 plays 2, T4 8 */
     case S_SEQUENCE_FULL:
+    case S_SEQUENCE_CHAIN:
     case S_SEQUENCE_NEXT: {
         uint32_t t, q;
+        memset(pb_next, 0, sizeof pb_next); memset(pb_start, 0, sizeof pb_start); memset(pb_chain, 0, sizeof pb_chain);
+        ui_prefs2 &= (uint8_t)~(PREF_SEQ_END >> 16); song.playing = 0;
         for (t = 0; t < NTRK; t++)
             for (q = 0; q < PB_N; q++) {
                 if (!(s == S_SEQUENCE_FULL || (t == 0u && (q == 0u || q == 2u || q == 3u)) || (t == 2u && q == 1u)))
@@ -1188,6 +1194,9 @@ static void setup(int s)
             }
         (void)pb_select(0, 2); (void)pb_select(2, 1); (void)pb_select(3, 7);
         song.sel = s == S_SEQUENCE_FULL ? 3 : 0;
+        if (s == S_SEQUENCE_CHAIN) {                   /* 1.6 CHAIN: T1 chains 4 from its 3rd, T3 2 from its 2nd (PRESETS) */
+            song.sel = 0; (void)pb_set_chain(0, 4); song.sel = 2; (void)pb_set_chain(2, 2);
+        }
         if (s == S_SEQUENCE_NEXT) {                    /* SEQ SWITCH END, playing: T1 and T3 wait (for 6 and 1) */
             ui_prefs2 |= (uint8_t)(PREF_SEQ_END >> 16); song.playing = 1;
             (void)pb_request(0, 5); (void)pb_request(2, 0);

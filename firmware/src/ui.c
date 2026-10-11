@@ -25,6 +25,7 @@ static uint32_t up_pat_rank(uint32_t slot);
 static void up_pat_load(track_t *t, uint32_t k);
 static void seq_switch_ui(uint32_t t, uint32_t s);   /* ui_layer.c: track t plays sequence s (patbank.c) */
 static void seq_poll(void);                          /* ui_layer.c: the queued switches (SEQ SWITCH END), main loop */
+static void seq_chain_ui(uint32_t t, int32_t steps);  /* ui_layer.c: PRESETS on SEQ > SEQUENCE: the chain's length */
 static void up_auto_name(char *b, uint32_t e, uint32_t k);   /* naming (ui_name.c) */
 static void up_ui_named(uint32_t op, uint32_t k, const char *name, uint32_t cat);
 static uint32_t up_cat(uint32_t k);
@@ -452,6 +453,8 @@ static void chain_play_ui(void)
     uint32_t rc = chain_prepare();
     if (!rc) {
         ui.force = 1;
+    } else if (rc == 16u) {
+        ui_message("TOO MANY SEQ");                     /* (more sequences chosen on lanes than a song holds: CHAIN_ALT) */
     } else if (rc >= 3u) {
         char b[8] = "A EMPTY";
         b[0] = (char)('A' + rc - 3u);
