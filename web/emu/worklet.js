@@ -28,6 +28,28 @@ export function restoreSectors(nor, sectors) {
 
 export const HOLD_MS = 24;
 
+// The panel's knobs from a MIDI controller (the page's Web MIDI in): CC 20..26 turn SELECT, ALGORITHM, PRESETS,
+// KNOB 1..4 (the encoder roles), a detent a step; CC 27 sets MASTER (a pot on the FM-1: absolute in every mode). The
+// firmware's CC map (midi_control.c) has none of them, so they stay here. mode, as the controller sends a turn:
+//   abs  absolute (the default): by how far the value moves, so it takes over from anywhere without a jump; last:
+//        the value each knob CC sent before (the first one only takes its place)
+//   bin  relative, 64 +- n (65 = +1, 63 = -1)
+//   twos relative, two's complement (1 = +1, 127 = -1)
+//   sign relative, sign bit (1 = +1, 65 = -1)
+// -> {role, n} | {master: 0..1023} | null (not one of them: on to the firmware)
+export const KNOB_CC = 20, MASTER_CC = 27, KNOB_MODES = ["abs", "bin", "twos", "sign"];
+export function midiKnob(last, cc, value, mode = "abs") {
+  if (cc === MASTER_CC) return { master: Math.round(value * 1023 / 127) };
+  const role = cc - KNOB_CC;
+  if (role < 0 || role >= 7) return null;
+  if (mode === "bin") return { role, n: value - 64 };
+  if (mode === "twos") return { role, n: value < 64 ? value : value - 128 };
+  if (mode === "sign") return { role, n: value < 64 ? value : 64 - value };
+  const was = last[role];
+  last[role] = value;
+  return { role, n: was === undefined ? 0 : value - was };
+}
+
 if (typeof registerProcessor === "function") {
   const clock = globalThis.performance ? () => globalThis.performance.now() : () => Date.now();
   class Felucca extends AudioWorkletProcessor {

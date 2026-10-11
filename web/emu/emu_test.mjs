@@ -11,7 +11,7 @@
 // Then the cost: 1 s of a heavy song (FM6, PHYS, GRAIN chords, DRUM) against real time (BENCH_MAX, default 0.5:
 // fails above half of real time on this machine).
 import fs from "fs";
-import { storeSectors, restoreSectors } from "./worklet.js";
+import { storeSectors, restoreSectors, midiKnob, KNOB_CC, MASTER_CC } from "./worklet.js";
 
 const wasmPath = process.argv[2] || "build/emu/felucca.wasm", nativePath = process.argv[3];
 const bytes = fs.readFileSync(wasmPath);
@@ -136,6 +136,43 @@ const c = await device(null);
 c.render(600);
 check("a fresh instance with the kept sectors has it; one without does not",
       b.ex.web_test_user_preset(0) === 1 && c.ex.web_test_user_preset(0) === 0);
+
+// ---- the panel's knobs from a MIDI controller: the page turns them by midiKnob (worklet.js), as a drag does
+{
+  const last = [], cc = KNOB_CC + EN.PRESETS, k = (c, v, mode) => midiKnob(last, c, v, mode);
+  const a = [k(cc, 40), k(cc, 43), k(cc, 41), k(MASTER_CC, 127), k(74, 10), k(28, 10)];
+  check("absolute (the default) CC 22 (PRESETS): its first value takes its place, then +3, -2; CC 27 MASTER; CC 74, 28 the firmware's",
+        a[0].role === EN.PRESETS && a[0].n === 0 && a[1].n === 3 && a[2].n === -2 && a[3].master === 1023 &&
+        a[4] === null && a[5] === null);
+  const n = (mode, vs) => vs.map((v) => k(cc, v, mode).n).join();
+  check("relative CC 22: 64+-n, two's complement, sign bit; CC 27 absolute in each",
+        n("bin", [65, 63, 64, 70, 0, 127]) === "1,-1,0,6,-64,63" && n("twos", [1, 127, 0, 63, 64]) === "1,-1,0,63,-64" &&
+        n("sign", [1, 65, 0, 64, 127]) === "1,-1,0,0,-63" &&
+        ["bin", "twos", "sign"].every((m) => k(MASTER_CC, 0, m).master === 0 && k(MASTER_CC, 127, m).master === 1023) &&
+        k(20, 65, "bin").role === EN.SELECT && k(26, 65, "bin").role === EN.K4 && k(19, 65, "bin") === null);
+  const t = await device(null), u = await device(null);             // u: left alone
+  t.render(1200);
+  u.render(1200);
+  t.render(40);
+  t.turn(EN.PRESETS, 3);
+  t.render(300);
+  u.render(460);
+  const ts = t.screen(), us = u.screen();
+  for (const [mode, vs] of [["abs", [64, 65, 66, 67]], ["bin", [65, 65, 65]], ["twos", [1, 1, 1]], ["sign", [1, 1, 1]]]) {
+    const m = await device(null), knob = [];                   // a controller's knob: three detents
+    m.render(1200);
+    for (const v of vs) {
+      const r = midiKnob(knob, cc, v, mode);
+      if (r.n) m.ex.web_enc(r.role, r.n);
+      m.render(40);
+    }
+    if (mode !== "abs") m.render(40);                           // as many 40 ms steps as the four absolute values
+    m.render(300);
+    const ms = m.screen();
+    check(`CC 22 ${mode} ${vs.join(" ")} turns PRESETS as three detents of the panel's knob do`,
+          ms.some((v, i) => v !== us[i]) && ms.every((v, i) => v === ts[i]));
+  }
+}
 
 // ---- deterministic: the same gestures, the same samples
 async function song() {

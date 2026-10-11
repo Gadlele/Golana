@@ -17,7 +17,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 
 - Install: [web installer](https://hugelton.github.io/Felucca/) (Chrome or Edge, USB), or `tools/fm1_install.py` from a terminal
 - Try: [Felucca in your browser](https://hugelton.github.io/Felucca/webapp/try/): the same firmware compiled to
-  WebAssembly, with the panel on screen (mouse, touch, computer keyboard, Web MIDI in)
+  WebAssembly, with the panel on screen (mouse, touch, computer keyboard, Web MIDI in; with the page's checkbox on, a
+  controller's knobs on CC 20..26 turn SELECT, ALGORITHM, PRESETS, KNOB 1..4, relative or absolute, CC 27 sets MASTER)
 - Editor: [web editor](https://hugelton.github.io/Felucca/webapp/editor/); its development has moved to
   [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp)
 - Build: [BUILDING.md](BUILDING.md)
