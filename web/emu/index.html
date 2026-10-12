@@ -295,11 +295,13 @@ function bindKnob(k) {
   k.hit.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     k.hit.setPointerCapture(e.pointerId);
-    drag = { y: e.clientY, acc: 0 };
+    drag = { x: e.clientX, y: e.clientY, acc: 0 };
   });
   k.hit.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    drag.acc += drag.y - e.clientY;
+    const dx = e.clientX - drag.x, dy = drag.y - e.clientY;   // up or right: clockwise
+    drag.acc += Math.abs(dx) > Math.abs(dy) ? dx : dy;          // the larger of the two
+    drag.x = e.clientX;
     drag.y = e.clientY;
     const step = k.role === "master" ? 3 : 8, n = Math.trunc(drag.acc / step);
     if (n) { drag.acc -= n * step; turn(k, n); }
