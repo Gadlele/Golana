@@ -1,7 +1,0 @@
-PIANO HD: the 5-zone PIANO sample set of Felucca 1.0 .. 1.1.5, as a user sample slot (the editor installs it).
-PIANO_HD.hdr is the slot header (SMP_END), PIANO_HD.bin its IMA ADPCM data (SMP_WRITE), made by Felucca's
-tools/gen_samples.py --user-slot PIANO "PIANO HD".
-
-Source material: Versilian Studios (Sam Gossner), VCSL, CC0 1.0 Universal (public domain dedication)
-  https://github.com/sgossner/VCSL  https://creativecommons.org/publicdomain/zero/1.0/
-  Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C1_v2_rr1_Player.wav, ..C2, ..C3, ..C4, ..C5
