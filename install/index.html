@@ -947,7 +947,7 @@ function parseInfo(a) {
   const backup = /^FELUCCA /i.test(version) && ext[0] === 16 && ext[1] === 0x55 && ext[2] === 1 &&
     ext[4] === 0x4d && ext[5] === 1 && ext[8] === 0x42 && ext[9] === 1 && !!(ext[10] & 1);
   const v = version.replace(/^FELUCCA\s*/i, "");
-  const fw = engines.includes("GOLANA") ? "Golana" : engines.includes("BELL") && engines.includes("AMBI") ? "Fantasma (or Pelucco)" : "Felucca";
+  const fw = engines.includes("GOLANA") ? "Golana" : engines.includes("BELL") && engines.includes("AMBI") ? "Fantasma" : "Felucca";
   return { version, v, engines, backup, fw };
 }
 async function probe(up) {

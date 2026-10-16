@@ -60,7 +60,7 @@ section .sub { margin: 0 0 36px; color: var(--mid); max-width: 44em; }
                border: 1px solid var(--rule); background: #000; }
 .gallery figcaption { margin: 10px 0 0; font-size: 14px; color: var(--mid); }
 .gallery figcaption b { color: var(--text); font-weight: 600; }
-.band { background: var(--panel); border-block: 1px solid var(--rule); }
+body > section:nth-of-type(even) { background: var(--panel); border-block: 1px solid var(--rule); }   /* the bands: every other section */
 .three { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 28px; }
 .three h3 { margin: 0 0 8px; font: 700 18px/1.3 var(--display); color: var(--accent); }
 .three p { margin: 0; color: var(--mid); font-size: 15.5px; }
@@ -79,6 +79,19 @@ section .sub { margin: 0 0 36px; color: var(--mid); max-width: 44em; }
 .versions li em { margin-left: auto; font: 600 12px var(--mono); font-style: normal; color: var(--on-accent); background: var(--accent); padding: 2px 8px; border-radius: 99px; }
 .versions p { margin: 14px 0 0; font-size: 13px; color: var(--mid); }
 @media (max-width: 820px) { .news { grid-template-columns: 1fr; } }
+.pieces { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 18px; }
+.piece { border: 1px solid var(--rule); border-radius: 16px; padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 10px; }
+body > section:nth-of-type(even) .piece { background: var(--bg); }
+body > section:nth-of-type(odd) .piece { background: var(--panel); }
+.piece .ph { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.piece .no { font: 600 13px var(--mono); color: var(--accent); }
+.piece h3 { margin: 0; font: 700 21px/1.2 var(--display); }
+.piece em { font: 600 11px var(--mono); font-style: normal; color: var(--on-accent); background: var(--warn); padding: 3px 8px; border-radius: 99px; }
+.piece .len { margin-left: auto; font: 13px var(--mono); color: var(--mid); }
+.piece p { margin: 0; color: var(--mid); font-size: 15.5px; }
+.piece .parts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.piece .parts li { font: 12px/1.6 var(--mono); color: var(--text); border: 1px solid var(--rule); border-radius: 99px; padding: 1px 10px; }
+.piece audio { width: 100%; height: 40px; margin-top: auto; }
 footer { border-top: 1px solid var(--rule); padding: 28px 0 48px; font-size: 13px; color: var(--mid); }
 footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
 </style>
@@ -124,7 +137,7 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
   </div>
 </section>
 
-<section class="band">
+<section>
   <div class="wrap">
     <h2>A synth you can read</h2>
     <p class="sub">Twelve buttons open the sections, as on the classic microKORG: EDIT the oscillators, SCL the filter, ENV the envelopes, LFO the LFOs and the patch bay, FX the effects. KNOB 1–4 always set the four cards on the screen, ALGORITHM is always the cutoff.</p>
@@ -151,7 +164,27 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
   </div>
 </section>
 
-<section class="band">
+<section id="sounds">
+  <div class="wrap">
+    <h2>Sounds</h2>
+    <p class="sub">Eight short pieces, each one factory program played as the FM-1 plays it: one synth, its four voices, its arpeggiator, delay and reverb. No effects added afterwards.</p>
+    <div class="pieces">
+      <article class="piece"><div class="ph"><span class="no">01</span><h3>Sync Pad</h3><span class="len">0:26</span></div><p>Oscillator sync swept by an envelope, four voices wide: Dmaj7, Bm9, Gmaj7, Aadd9.</p><ul class="parts"><li>GOLANA SYNC PAD</li></ul><audio controls preload="none" src="sounds/1_sync.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">02</span><h3>Bright Arp</h3><span class="len">0:20</span></div><p>The arpeggiator on held chords (Cm, Ab, Eb, Bb), in time with the tempo, the delay in time too.</p><ul class="parts"><li>GOLANA BRIGHT ARP</li></ul><audio controls preload="none" src="sounds/2_arp.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">03</span><h3>80s Brass</h3><span class="len">0:21</span></div><p>Stabs of the brass patch on Eb, Bb, Cm, Ab: filter envelope on every hit.</p><ul class="parts"><li>GOLANA 80S BRASS</li></ul><audio controls preload="none" src="sounds/3_brass.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">04</span><h3>Organ</h3><span class="len">0:24</span></div><p>A gospel turn on the organ patch: C, F/C, C, G7.</p><ul class="parts"><li>GOLANA ORGAN</li></ul><audio controls preload="none" src="sounds/4_organ.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">05</span><h3>Phase Pad</h3><span class="len">0:30</span></div><p>The phaser on a slow pad: Am9, Fmaj7, Cmaj7, Em7.</p><ul class="parts"><li>GOLANA PHASE PAD</li></ul><audio controls preload="none" src="sounds/5_phase.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">06</span><h3>Slow Arp</h3><span class="len">0:25</span></div><p>A slow arpeggio with long echoes: Am7, Dm7, Gsus4, C, two bars each.</p><ul class="parts"><li>GOLANA SLOW ARP</li></ul><audio controls preload="none" src="sounds/6_slowarp.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">07</span><h3>Soft Bells</h3><span class="len">0:27</span></div><p>Bell chords with a tune on top, four voices at once: Gmaj7, Em7, Cmaj7, D.</p><ul class="parts"><li>GOLANA SOFT BELLS</li></ul><audio controls preload="none" src="sounds/7_bells.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">08</span><h3>Acid Sweep</h3><span class="len">0:19</span></div><p>The squelchy line, with the cutoff opening and closing as the ALGORITHM knob does.</p><ul class="parts"><li>GOLANA ACID LINE</li></ul><audio controls preload="none" src="sounds/8_acid.mp3"></audio></article>
+    </div>
+  </div>
+</section>
+<script>
+document.querySelectorAll("#sounds audio").forEach((a, _, all) => a.addEventListener("play", () => all.forEach((b) => b !== a && b.pause())));
+</script>
+
+<section>
   <div class="wrap">
     <h2>On the screen</h2>
     <p class="sub">Real screens of Golana 1.0, taken from the emulator.</p>
@@ -186,7 +219,7 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
   </div>
 </section>
 
-<section class="band">
+<section>
   <div class="wrap endcta">
     <h2>Ready?</h2>
     <p class="sub" style="margin-inline:auto">Try it first in the browser, no FM-1 needed, or install it now.</p>
