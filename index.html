@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Golana · firmware for the M-VAVE FM-1</title>
 <meta name="description" content="One analog-style synth for the M-VAVE FM-1, laid out like the classic microKORG, with a screen that draws the sound.">
-<meta property="og:title" content="Golana 1.0">
+<meta property="og:title" content="Golana 1.1">
 <meta property="og:description" content="One analog-style synth for the M-VAVE FM-1, laid out like the classic microKORG, with a screen that draws the sound.">
 <meta property="og:image" content="img/device.png">
 <link rel="icon" href="img/icon.png">
@@ -104,7 +104,7 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
   </header>
   <div class="hero">
     <div>
-      <div class="kicker">Firmware for the M-VAVE FM-1 · 1.0</div>
+      <div class="kicker">Firmware for the M-VAVE FM-1 · 1.1</div>
       <h1>Golana</h1>
       <p class="lead">The FM-1 as a single, deep analog-style synthesizer: two oscillators, five filters, two envelopes, two LFOs, a patch bay, an arpeggiator and a step sequencer. Every page draws what it does.</p>
       <div class="cta">
@@ -121,15 +121,15 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
 <section>
   <div class="wrap news">
     <div class="body">
-      <h2>What's new in 1.0</h2>
-      <p class="date">2026-10-16</p>
-<p>The first release. Golana is <a href="https://github.com/hugelton/Felucca">Felucca</a> 1.5.1 turned into one analog-style synth, laid out like the classic microKORG:</p>
-<ul><li><b>Two oscillators</b>: OSC 1 SAW, PULSE, TRI (wavefold) or SINE (cross modulation); OSC 2 SAW, SQR or TRI with RING and SYNC; noise and a wavefolder in the mixer.</li><li><b>Five filters</b>: LPF24, LPF12, BPF, HPF and MS20, with key tracking and its own envelope.</li><li><b>FILTER EG, AMP EG, two LFOs</b> with key and tempo sync, and <b>four patch cords</b>.</li><li><b>POLY, MONO, LEGATO, UNISON</b> (eight detuned oscillators), detune, portamento, spread.</li><li><b>Arpeggiator</b> and a <b>16-step sequencer</b> saved with each program.</li><li><b>Effects</b>: MOD FX (chorus, flanger, ensemble, phaser, METAL), delay and reverb in three orders.</li><li><b>32 programs</b>, 16 factory sounds; MIDI Program Change; CC74 and CC71 move cutoff and resonance.</li><li><b>Pages that draw</b> the sound; four palettes; a three-second power-on with the eighties' stripes.</li><li><b>USB rescue</b>: OCT− held at power-on, or after two failed starts.</li></ul>
+      <h2>What's new in 1.1</h2>
+      <p class="date">2026-10-19</p>
+<ul><li><b>Four new arpeggiator types</b> (SEQ › ARP › TYPE), after the six of 1.0, which play as before: - <b>ORDER</b>: the notes in the order you pressed them. - <b>CONVERGE</b>: from the outside in, the lowest, the highest, the second lowest, the second highest… - <b>PEDAL</b>: the lowest note between each of the others, as a pedal (C E C G C C′…). - <b>DOUBLE</b>: each note twice, then its octave twice (C C C′ C′, E E E′ E′, G G G′ G′).</li></ul>
     </div>
     <aside class="versions">
       <h3>Versions</h3>
       <ul>
-      <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.0"><b>1.0</b></a><span>2026-10-16</span> <em>latest</em></li>
+      <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.1"><b>1.1</b></a><span>2026-10-19</span> <em>latest</em></li>
+      <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.0"><b>1.0</b></a><span>2026-10-16</span></li>
       </ul>
       <p>Every version, its notes and its package: <a href="https://github.com/Gadlele/Golana/releases">Releases</a> ·
         <a href="https://github.com/Gadlele/Golana/blob/main/CHANGELOG.md">CHANGELOG</a></p>
@@ -155,7 +155,7 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
       <div class="feature" style="--c:#ecd660"><h3>Five filters</h3><p>LPF24, LPF12, BPF, HPF and <b>MS20</b>, a driven 12 dB low-pass whose resonance screams. A FOLD stage before it, key tracking and its own envelope.</p></div>
       <div class="feature" style="--c:#f07a9c"><h3>Envelopes and LFOs</h3><p>FILTER EG and AMP EG; two LFOs (SAW, SQR, TRI, SIN, S&amp;H) with key sync and tempo sync. Four patch cords route any of them to pitch, cutoff, amp and more.</p></div>
       <div class="feature" style="--c:#b092ff"><h3>Unison and glide</h3><p>POLY, MONO, LEGATO and UNISON: four voices, or eight detuned oscillators in unison. DETUNE, PORTA, EG RESET and SPREAD across the stereo field.</p></div>
-      <div class="feature" style="--c:#5cceaa"><h3>Arpeggiator and sequencer</h3><p>Six arp types over 1–4 octaves with latch, swing and steps on/off; a 16-step sequencer with notes, ties, accents and slides, saved with the program.</p></div>
+      <div class="feature" style="--c:#5cceaa"><h3>Arpeggiator and sequencer</h3><p>Ten arp types (ORDER, CONVERGE, PEDAL and DOUBLE new in 1.1) over 1–4 octaves with latch, swing and steps on/off; a 16-step sequencer with notes, ties, accents and slides, saved with the program.</p></div>
       <div class="feature" style="--c:#ff805c"><h3>Effects</h3><p>MOD FX (chorus, flanger, ensemble, phaser, or METAL distortion), a stereo delay in time with the tempo and a reverb, in three orders.</p></div>
       <div class="feature" style="--c:#66aaff"><h3>Pages that draw</h3><p>Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws the sound playing: RIDGE, RING or ORBIT.</p></div>
       <div class="feature" style="--c:#ffb547"><h3>32 programs</h3><p>Sixteen factory sounds (FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS, S&amp;H TEXTURE…) and sixteen free slots. MIDI Program Change picks them.</p></div>
@@ -224,7 +224,7 @@ document.querySelectorAll("#sounds audio").forEach((a, _, all) => a.addEventList
     <h2>Ready?</h2>
     <p class="sub" style="margin-inline:auto">Try it first in the browser, no FM-1 needed, or install it now.</p>
     <div class="cta">
-      <a class="btn primary" href="install/">Install Golana 1.0</a>
+      <a class="btn primary" href="install/">Install Golana 1.1</a>
       <a class="btn ghost" href="try/">Try it in your browser</a>
       <a class="btn ghost" href="https://github.com/Gadlele/Golana">Source on GitHub</a>
     </div>
