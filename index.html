@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Golana · firmware for the M-VAVE FM-1</title>
 <meta name="description" content="One analog-style synth for the M-VAVE FM-1, laid out like the classic microKORG, with a screen that draws the sound.">
-<meta property="og:title" content="Golana 1.1">
+<meta property="og:title" content="Golana 1.2">
 <meta property="og:description" content="One analog-style synth for the M-VAVE FM-1, laid out like the classic microKORG, with a screen that draws the sound.">
 <meta property="og:image" content="img/device.png">
 <link rel="icon" href="img/icon.png">
@@ -104,7 +104,7 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
   </header>
   <div class="hero">
     <div>
-      <div class="kicker">Firmware for the M-VAVE FM-1 · 1.1</div>
+      <div class="kicker">Firmware for the M-VAVE FM-1 · 1.2</div>
       <h1>Golana</h1>
       <p class="lead">The FM-1 as a single, deep analog-style synthesizer: two oscillators, five filters, two envelopes, two LFOs, a patch bay, an arpeggiator and a step sequencer. Every page draws what it does.</p>
       <div class="cta">
@@ -121,14 +121,15 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
 <section>
   <div class="wrap news">
     <div class="body">
-      <h2>What's new in 1.1</h2>
-      <p class="date">2026-10-19</p>
-<ul><li><b>Four new arpeggiator types</b> (SEQ › ARP › TYPE), after the six of 1.0, which play as before: - <b>ORDER</b>: the notes in the order you pressed them. - <b>CONVERGE</b>: from the outside in, the lowest, the highest, the second lowest, the second highest… - <b>PEDAL</b>: the lowest note between each of the others, as a pedal (C E C G C C′…). - <b>DOUBLE</b>: each note twice, then its octave twice (C C C′ C′, E E E′ E′, G G G′ G′).</li></ul>
+      <h2>What's new in 1.2</h2>
+      <p class="date">2026-10-20</p>
+<ul><li><b>SUB oscillator</b> (EDIT › SUB/DRIFT): a square or a sine one or two octaves below OSC 1, in step with it, with its own level into the mixer. Deep basses without giving up OSC 2.</li><li><b>DRIFT</b> (EDIT › SUB/DRIFT): analog age. Each note's two oscillators a little out of tune, each its own way, slowly wandering, and its filter a little off: from a touch of life to a worn-out machine.</li><li><b>Eight new factory sounds</b> in programs 17-24, made with them: SUB BASS, REESE, POLY CHORUS, OLD STRINGS, WORN TAPE, DRIFT LEAD, SUB ARP, AGED PAD. A program you wrote in 17-24 stays as it is.</li><li>Programs saved with 1.0 and 1.1 load exactly as before (SUB and DRIFT off).</li></ul>
     </div>
     <aside class="versions">
       <h3>Versions</h3>
       <ul>
-      <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.1"><b>1.1</b></a><span>2026-10-19</span> <em>latest</em></li>
+      <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.2"><b>1.2</b></a><span>2026-10-20</span> <em>latest</em></li>
+      <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.1"><b>1.1</b></a><span>2026-10-19</span></li>
       <li><a href="https://github.com/Gadlele/Golana/releases/tag/golana-v1.0"><b>1.0</b></a><span>2026-10-16</span></li>
       </ul>
       <p>Every version, its notes and its package: <a href="https://github.com/Gadlele/Golana/releases">Releases</a> ·
@@ -151,14 +152,15 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
     <h2>What's inside</h2>
     <p class="sub">A single voice architecture, explored in depth, with 32 programs.</p>
     <div class="features">
-      <div class="feature" style="--c:#ffb547"><h3>Two oscillators</h3><p>OSC 1: SAW with an octave-up blend, PULSE with width, TRI with a wavefolder, SINE with cross modulation. OSC 2: SAW, SQR or TRI with RING, SYNC or both, semitone and tune.</p></div>
+      <div class="feature" style="--c:#ffb547"><h3>Two oscillators and a sub</h3><p>OSC 1: SAW with an octave-up blend, PULSE with width, TRI with a wavefolder, SINE with cross modulation. OSC 2: SAW, SQR or TRI with RING, SYNC or both, semitone and tune. New in 1.2: a SUB oscillator, square or sine, one or two octaves down.</p></div>
+      <div class="feature" style="--c:#e0a070"><h3>DRIFT</h3><p>New in 1.2: analog age. Every note's oscillators a little out of tune, each its own way, slowly wandering, its filter a little off. From a touch of life to a worn-out tape.</p></div>
       <div class="feature" style="--c:#ecd660"><h3>Five filters</h3><p>LPF24, LPF12, BPF, HPF and <b>MS20</b>, a driven 12 dB low-pass whose resonance screams. A FOLD stage before it, key tracking and its own envelope.</p></div>
       <div class="feature" style="--c:#f07a9c"><h3>Envelopes and LFOs</h3><p>FILTER EG and AMP EG; two LFOs (SAW, SQR, TRI, SIN, S&amp;H) with key sync and tempo sync. Four patch cords route any of them to pitch, cutoff, amp and more.</p></div>
       <div class="feature" style="--c:#b092ff"><h3>Unison and glide</h3><p>POLY, MONO, LEGATO and UNISON: four voices, or eight detuned oscillators in unison. DETUNE, PORTA, EG RESET and SPREAD across the stereo field.</p></div>
       <div class="feature" style="--c:#5cceaa"><h3>Arpeggiator and sequencer</h3><p>Ten arp types (ORDER, CONVERGE, PEDAL and DOUBLE new in 1.1) over 1–4 octaves with latch, swing and steps on/off; a 16-step sequencer with notes, ties, accents and slides, saved with the program.</p></div>
       <div class="feature" style="--c:#ff805c"><h3>Effects</h3><p>MOD FX (chorus, flanger, ensemble, phaser, or METAL distortion), a stereo delay in time with the tempo and a reverb, in three orders.</p></div>
       <div class="feature" style="--c:#66aaff"><h3>Pages that draw</h3><p>Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws the sound playing: RIDGE, RING or ORBIT.</p></div>
-      <div class="feature" style="--c:#ffb547"><h3>32 programs</h3><p>Sixteen factory sounds (FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS, S&amp;H TEXTURE…) and sixteen free slots. MIDI Program Change picks them.</p></div>
+      <div class="feature" style="--c:#ffb547"><h3>32 programs</h3><p>24 factory sounds (FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS; new in 1.2: SUB BASS, REESE, WORN TAPE, AGED PAD…) and eight free slots. MIDI Program Change picks them.</p></div>
       <div class="feature" style="--c:#96d668"><h3>Four palettes</h3><p>NIGHT, CRT, PAPER and NEON. And a three-second power-on with the eighties' stripes.</p></div>
     </div>
   </div>
@@ -169,13 +171,13 @@ footer p { margin: 0 0 10px; max-width: 70em; } footer a { color: var(--mid); }
     <h2>Sounds</h2>
     <p class="sub">Eight short pieces, each one factory program played as the FM-1 plays it: one synth, its four voices, its arpeggiator, delay and reverb. No effects added afterwards.</p>
     <div class="pieces">
-      <article class="piece"><div class="ph"><span class="no">01</span><h3>Sync Pad</h3><span class="len">0:26</span></div><p>Oscillator sync swept by an envelope, four voices wide: Dmaj7, Bm9, Gmaj7, Aadd9.</p><ul class="parts"><li>GOLANA SYNC PAD</li></ul><audio controls preload="none" src="sounds/1_sync.mp3"></audio></article>
-      <article class="piece"><div class="ph"><span class="no">02</span><h3>Bright Arp</h3><span class="len">0:20</span></div><p>The arpeggiator on held chords (Cm, Ab, Eb, Bb), in time with the tempo, the delay in time too.</p><ul class="parts"><li>GOLANA BRIGHT ARP</li></ul><audio controls preload="none" src="sounds/2_arp.mp3"></audio></article>
-      <article class="piece"><div class="ph"><span class="no">03</span><h3>80s Brass</h3><span class="len">0:21</span></div><p>Stabs of the brass patch on Eb, Bb, Cm, Ab: filter envelope on every hit.</p><ul class="parts"><li>GOLANA 80S BRASS</li></ul><audio controls preload="none" src="sounds/3_brass.mp3"></audio></article>
-      <article class="piece"><div class="ph"><span class="no">04</span><h3>Organ</h3><span class="len">0:24</span></div><p>A gospel turn on the organ patch: C, F/C, C, G7.</p><ul class="parts"><li>GOLANA ORGAN</li></ul><audio controls preload="none" src="sounds/4_organ.mp3"></audio></article>
-      <article class="piece"><div class="ph"><span class="no">05</span><h3>Phase Pad</h3><span class="len">0:30</span></div><p>The phaser on a slow pad: Am9, Fmaj7, Cmaj7, Em7.</p><ul class="parts"><li>GOLANA PHASE PAD</li></ul><audio controls preload="none" src="sounds/5_phase.mp3"></audio></article>
-      <article class="piece"><div class="ph"><span class="no">06</span><h3>Slow Arp</h3><span class="len">0:25</span></div><p>A slow arpeggio with long echoes: Am7, Dm7, Gsus4, C, two bars each.</p><ul class="parts"><li>GOLANA SLOW ARP</li></ul><audio controls preload="none" src="sounds/6_slowarp.mp3"></audio></article>
-      <article class="piece"><div class="ph"><span class="no">07</span><h3>Soft Bells</h3><span class="len">0:27</span></div><p>Bell chords with a tune on top, four voices at once: Gmaj7, Em7, Cmaj7, D.</p><ul class="parts"><li>GOLANA SOFT BELLS</li></ul><audio controls preload="none" src="sounds/7_bells.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">01</span><h3>Sub Bass</h3><em>NEW IN 1.2</em><span class="len">0:23</span></div><p>A saw over the new SUB oscillator, a square an octave down: a line in E minor.</p><ul class="parts"><li>GOLANA SUB BASS</li></ul><audio controls preload="none" src="sounds/1_subbass.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">02</span><h3>Worn Tape</h3><em>NEW IN 1.2</em><span class="len">0:29</span></div><p>DRIFT high: soft keys off a warped tape, every note its own way out of tune. Dm9, Bbmaj7, F/A, Gm9.</p><ul class="parts"><li>GOLANA WORN TAPE</li></ul><audio controls preload="none" src="sounds/2_worntape.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">03</span><h3>Sync Pad</h3><span class="len">0:26</span></div><p>Oscillator sync swept by an envelope, four voices wide: Dmaj7, Bm9, Gmaj7, Aadd9.</p><ul class="parts"><li>GOLANA SYNC PAD</li></ul><audio controls preload="none" src="sounds/3_sync.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">04</span><h3>Poly Chorus</h3><em>NEW IN 1.2</em><span class="len">0:22</span></div><p>A pulse with PWM on a sub square, a lush chorus, a little DRIFT: Fmaj7, G6, Em7, Am9.</p><ul class="parts"><li>GOLANA POLY CHORUS</li></ul><audio controls preload="none" src="sounds/4_polychorus.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">05</span><h3>Bright Arp</h3><span class="len">0:20</span></div><p>The arpeggiator on held chords (Cm, Ab, Eb, Bb), in time with the tempo, the delay in time too.</p><ul class="parts"><li>GOLANA BRIGHT ARP</li></ul><audio controls preload="none" src="sounds/5_arp.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">06</span><h3>Aged Pad</h3><em>NEW IN 1.2</em><span class="len">0:33</span></div><p>DRIFT all the way, a breath of noise, a sine two octaves down: Ebmaj9, Cm9, Abmaj7, Bb6.</p><ul class="parts"><li>GOLANA AGED PAD</li></ul><audio controls preload="none" src="sounds/6_agedpad.mp3"></audio></article>
+      <article class="piece"><div class="ph"><span class="no">07</span><h3>80s Brass</h3><span class="len">0:21</span></div><p>Stabs of the brass patch on Eb, Bb, Cm, Ab: filter envelope on every hit.</p><ul class="parts"><li>GOLANA 80S BRASS</li></ul><audio controls preload="none" src="sounds/7_brass.mp3"></audio></article>
       <article class="piece"><div class="ph"><span class="no">08</span><h3>Acid Sweep</h3><span class="len">0:19</span></div><p>The squelchy line, with the cutoff opening and closing as the ALGORITHM knob does.</p><ul class="parts"><li>GOLANA ACID LINE</li></ul><audio controls preload="none" src="sounds/8_acid.mp3"></audio></article>
     </div>
   </div>
@@ -224,7 +226,7 @@ document.querySelectorAll("#sounds audio").forEach((a, _, all) => a.addEventList
     <h2>Ready?</h2>
     <p class="sub" style="margin-inline:auto">Try it first in the browser, no FM-1 needed, or install it now.</p>
     <div class="cta">
-      <a class="btn primary" href="install/">Install Golana 1.1</a>
+      <a class="btn primary" href="install/">Install Golana 1.2</a>
       <a class="btn ghost" href="try/">Try it in your browser</a>
       <a class="btn ghost" href="https://github.com/Gadlele/Golana">Source on GitHub</a>
     </div>
