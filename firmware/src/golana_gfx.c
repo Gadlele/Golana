@@ -154,9 +154,8 @@ static void gu_home_ridge(int32_t w, int32_t h, uint16_t acc, uint16_t surf)
 }
 
 /* -------------------------------------------------------------- OSC 1 / 2 --- */
-static int32_t gu_osc1_at(const int16_t *p, uint32_t ph, uint32_t ph2)
+static int32_t gu_osc1_at(const int16_t *p, int32_t c1, uint32_t ph, uint32_t ph2)
 {
-    int32_t c1 = clamp(p[GL_O1C1], 0, 127);
     switch (clamp(p[GL_O1WAVE], 0, 3)) {
     case 1:
         return ph < 0x80000000u + (uint32_t)c1 * 0xF00000u ? 26000 : -26000;
@@ -177,11 +176,14 @@ static void gu_osc(int32_t w, int32_t h, uint32_t two, uint16_t acc, uint16_t su
 {
     const int16_t *p = gu_t()->p;
     int16_t y[224];
-    int32_t i, cy = h / 2, k = h / 2 - 8;
+    int32_t i, cy = h / 2, k = h / 2 - 8, pass, c1 = clamp(p[GL_O1C1], 0, 127), c2 = clamp(p[GL_O1C2], 0, 127);
     int32_t semi = clamp(p[GL_O2SEMI], -24, 24), md = clamp(p[GL_O2MOD], 0, 3);
     uint32_t r2 = pitch_inc((uint32_t)(60 * 16 + semi * 16)), r1 = pitch_inc(60u * 16u);
     cv_rect(8, cy, w - 16, 1, ux_mix(surf, acc, 25));
-    {
+    /* OSC 1 with CTRL 2: first, faint, the wave at the two ends LFO 1 moves CTRL 1 to (CTRL 1 -+ CTRL 2); then the wave */
+    for (pass = !two && c2 ? 0 : 2; pass < 3; pass++) {
+        int32_t cc = pass == 0 ? clamp(c1 - c2, 0, 127) : pass == 1 ? clamp(c1 + c2, 0, 127) : c1;
+        uint16_t col = pass < 2 ? ux_mix(surf, acc, 40) : acc;
         uint32_t ratio = (r2 >> 8) * 256u / ((r1 >> 16) | 1u);   /* OSC 2 / OSC 1, Q16 (32-bit: no 64-bit divide) */
         for (i = 0; i < 224; i++) {                    /* 1.5 cycles of OSC 1 */
             uint64_t tot = (uint64_t)(uint32_t)i * (0xFFFFFFFFu / 149u);
@@ -190,18 +192,19 @@ static void gu_osc(int32_t w, int32_t h, uint32_t two, uint16_t acc, uint16_t su
             ph2 = md >= 2 ? (uint32_t)(((uint64_t)ph * ratio) >> 16)     /* SYNC: from OSC 1's start, every cycle */
                           : (uint32_t)((tot * ratio) >> 16);
             if (!two) {
-                v = gu_osc1_at(p, ph, ph2);
+                v = gu_osc1_at(p, cc, ph, ph2);
             } else {
                 v = gl_osc2((uint32_t)clamp(p[GL_O2WAVE], 0, 2), ph2, 0);
                 if (md == 1 || md == 3)
-                    v = mulq15(v, gu_osc1_at(p, ph, ph2));
+                    v = mulq15(v, gu_osc1_at(p, c1, ph, ph2));
             }
             y[i] = (int16_t)(cy - (clamp(v, -32767, 32767) * k >> 15));
         }
-    }
-    for (i = 1; i < 224; i++) {
-        cv_line(8 + i - 1, y[i - 1], 8 + i, y[i], acc);
-        cv_line(8 + i - 1, y[i - 1] + 1, 8 + i, y[i] + 1, acc);
+        for (i = 1; i < 224; i++) {
+            cv_line(8 + i - 1, y[i - 1], 8 + i, y[i], col);
+            if (pass == 2)
+                cv_line(8 + i - 1, y[i - 1] + 1, 8 + i, y[i] + 1, col);
+        }
     }
 }
 
@@ -304,7 +307,7 @@ static void gu_draw_graph(uint32_t g)
     int32_t h = gu_graph_h(g), w = 240;
     uint16_t acc = gu_btn_col(GU_PAGES[gu.page].btn), surf = GC_SURF;
     uint32_t sig = 0x811C9DC5u, live = g == GG_HOME || g == GG_LFO1 || g == GG_LFO2, i;
-    static const uint8_t IDS[] = {GL_O1WAVE, GL_O1C1, GL_O2WAVE, GL_O2MOD, GL_O2SEMI, GL_FTYPE, GL_CUTOFF, GL_RESO,
+    static const uint8_t IDS[] = {GL_O1WAVE, GL_O1C1, GL_O1C2, GL_O2WAVE, GL_O2MOD, GL_O2SEMI, GL_FTYPE, GL_CUTOFF, GL_RESO,
                                   GL_FA, GL_FD, GL_FS, GL_FR, P_ATK, P_DEC, P_SUS, P_REL, GL_L1WAVE, GL_L1FREQ, GL_L1SYNC,
                                   GL_L2WAVE, GL_L2FREQ, GL_L2SYNC};
     gu_frame++;

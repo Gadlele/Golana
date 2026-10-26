@@ -3,6 +3,12 @@
 Golana's versions, newest first. The numbers: **X.Y** adds something (saved programs still open), **X.Y.Z** only
 fixes, a new **X** may change how things are saved.
 
+## 1.3 — unreleased
+
+- **OSC 1's CTRL 1 and CTRL 2 say what they do**: their names change with the WAVE (SAW: OCTAVE, OCT LFO; PULSE:
+  WIDTH, PWM; TRI: FOLD, FOLD LFO; SINE: X-MOD, XMOD LFO), PULSE's WIDTH shows its duty in %, the drawing shows
+  faintly how far CTRL 2 (LFO 1) moves the wave, and the page's fourth card is LFO 1's rate.
+
 ## 1.2 — 2026-10-20
 
 - **SUB oscillator** (EDIT › SUB/DRIFT): a square or a sine one or two octaves below OSC 1, in step with it, with its

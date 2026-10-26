@@ -78,6 +78,12 @@ int main(int argc, char **argv)
     go_page(B_EDIT, 0); render(100); shot("osc1_saw");
     setv(GL_O1WAVE, 1); setv(GL_O1C1, 80); ui.force = 1; render(100); shot("osc1_pulse");
     setv(GL_O1WAVE, 2); setv(GL_O1C1, 100); ui.force = 1; render(100); shot("osc1_trifold");
+    /* 1.3: CTRL 1 / CTRL 2 named for the WAVE, CTRL 2's range drawn faint, LFO 1's rate on the fourth card */
+    setv(GL_O1WAVE, 0); setv(GL_O1C1, 40); setv(GL_O1C2, 40); ui.force = 1; render(100); shot("osc1_saw_lfo");
+    setv(GL_O1WAVE, 1); setv(GL_O1C1, 50); setv(GL_O1C2, 45); ui.force = 1; render(100); shot("osc1_pulse_pwm");
+    setv(GL_O1WAVE, 2); setv(GL_O1C1, 40); setv(GL_O1C2, 40); ui.force = 1; render(100); shot("osc1_tri_lfo");
+    setv(GL_O1WAVE, 3); setv(GL_O1C1, 40); setv(GL_O1C2, 30); ui.force = 1; render(100); shot("osc1_sine_lfo");
+    setv(GL_O1C1, 0); setv(GL_O1C2, 0);
     go_page(B_EDIT, 1); setv(GL_O2MOD, 2); setv(GL_O2SEMI, 7); setv(GL_O2WAVE, 0); ui.force = 1; render(100); shot("osc2_sync");
     go_page(B_SCL, 0);
     {

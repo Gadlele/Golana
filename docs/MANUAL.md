@@ -8,7 +8,7 @@ Golana is free software under the GPL-3.0, like Felucca. Felucca's own README, f
 
 | Section | Parameters |
 | --- | --- |
-| OSC 1 | WAVE (SAW, PULSE, TRI, SINE), CTRL 1 (SAW: an octave-up saw blended in; PULSE: width; TRI: wavefold; SINE: cross modulation from OSC 2), CTRL 2 (LFO 1 on CTRL 1) |
+| OSC 1 | WAVE (SAW, PULSE, TRI, SINE), CTRL 1 and CTRL 2, named on the screen for what they do with the WAVE: SAW OCTAVE (an octave-up saw blended in) and OCT LFO; PULSE WIDTH (the duty, 50 % to 4 %) and PWM; TRI FOLD (wavefold) and FOLD LFO; SINE X-MOD (cross modulation from OSC 2) and XMOD LFO. CTRL 2 is LFO 1 moving CTRL 1: the drawing shows, faint, the two ends it reaches. The fourth card: LFO 1's rate |
 | OSC 2 | WAVE (SAW, SQR, TRI), MOD (OFF, RING, SYNC, R+S), SEMITONE, TUNE |
 | MIXER | OSC 1, OSC 2, NOISE, FOLD (a wavefolder on the mix, before the filter) |
 | SUB/DRIFT | (1.2) SUB TYPE (-1 SQR, -2 SQR, -1 SINE, -2 SINE: a square or a sine one or two octaves below OSC 1, in step with it), SUB LEVEL (into the mixer, 0 off), DRIFT (analog age: each note's two oscillators a little out of tune, each its own way, slowly wandering, and its cutoff a little off; 0 off) |

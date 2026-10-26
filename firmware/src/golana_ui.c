@@ -79,7 +79,7 @@ static const char *const N_GSFLAG[] = {"OFF", "ACCENT", "SLIDE", "BOTH"};
 static const gu_page_t GU_PAGES[] = {
     {B_HOME, "PERFORM", "PERFORM",
      {{GL_CUTOFF, "CUTOFF", 0}, {GL_RESO, "RESO", 0}, {GL_FEGINT, "EG INT", 0}, {GL_L1FREQ, "LFO 1", 0}}},
-    {B_EDIT, "OSC 1", "OSC 1", {{GL_O1WAVE, "WAVE", 0}, {GL_O1C1, "CTRL 1", 0}, {GL_O1C2, "CTRL 2", 0}, {GV_NONE, 0, 0}}},
+    {B_EDIT, "OSC 1", "OSC 1", {{GL_O1WAVE, "WAVE", 0}, {GL_O1C1, "CTRL 1", 0}, {GL_O1C2, "CTRL 2", 0}, {GL_L1FREQ, "LFO 1", 0}}},
     {B_EDIT, "OSC 2", "OSC 2",
      {{GL_O2WAVE, "WAVE", 0}, {GL_O2MOD, "MOD", 0}, {GL_O2SEMI, "SEMI", 0}, {GL_O2TUNE, "TUNE", 0}}},
     {B_EDIT, "MIXER", "MIXER", {{GL_MIX1, "OSC 1", 0}, {GL_MIX2, "OSC 2", 0}, {GL_NOISE, "NOISE", 0}, {GL_FOLD, "FOLD", 0}}},
@@ -394,6 +394,11 @@ static void gu_text(const gu_par_t *q, char *b)
         fmt_int(b + str_len(b), v / 12 - 1);
         return;
     }
+    if (q->id == GL_O1C1 && gu_t()->p[GL_O1WAVE] == 1) {   /* PULSE's WIDTH: its duty, 50 % .. ~4 % (eng_golana.c pw) */
+        fmt_int(b, 50 - (v * 366 + 500) / 1000);
+        str_cpy(b + str_len(b), "%", 2);
+        return;
+    }
     if (!names && q->id < P_COUNT && gu_desc(q->id)->fmt == F_ENUM)
         names = gu_desc(q->id)->names;
     gu_range(q, &lo, &hi);
@@ -519,12 +524,21 @@ static void gu_draw_foot(void)
 
 /* the tabs, as on a card index: the pages of the button whose page is open. The open one in the button's colour,
  * "BUTTON · PAGE", joined to the line under the tabs; the button's other pages beside it, dark, by short names */
-/* card k of page pg as it works now: MOD FX's METAL turns SPEED DEPTH MIX into GAIN MID MID FREQ */
+/* card k of page pg as it works now: MOD FX's METAL turns SPEED DEPTH MIX into GAIN MID MID FREQ; OSC 1's CTRL 1 and
+ * CTRL 2 are named for what they do with its WAVE (CTRL 2: LFO 1 on CTRL 1, the page's fourth card LFO 1's rate) */
 static const gu_par_t *gu_pk(const gu_page_t *pg, uint32_t k)
 {
     static const gu_par_t METAL[3] = {{P_IA, "GAIN", 0}, {P_IB, "MID", 0}, {P_IC, "MID FREQ", 0}};
+    static const gu_par_t CTRL[4][2] = {
+        {{GL_O1C1, "OCTAVE", 0}, {GL_O1C2, "OCT LFO", 0}},      /* SAW: the octave-up saw blended in */
+        {{GL_O1C1, "WIDTH", 0}, {GL_O1C2, "PWM", 0}},          /* PULSE: 50 % .. ~6 % */
+        {{GL_O1C1, "FOLD", 0}, {GL_O1C2, "FOLD LFO", 0}},      /* TRI: folded */
+        {{GL_O1C1, "X-MOD", 0}, {GL_O1C2, "XMOD LFO", 0}},     /* SINE: OSC 2 moves its phase */
+    };
     if (pg->k[0].id == GL_MFX && k && gu_t()->p[GL_MFX] == 5)
         return &METAL[k - 1u];
+    if (pg->k[0].id == GL_O1WAVE && (k == 1u || k == 2u))
+        return &CTRL[clamp(gu_t()->p[GL_O1WAVE], 0, 3)][k - 1u];
     return &pg->k[k];
 }
 #define GU_TAB_Y 32
