@@ -34,17 +34,18 @@ It is a fork of [Felucca](https://github.com/hugelton/Felucca).
 
 | Section | |
 | --- | --- |
-| **OSC 1** | SAW (an octave-up saw blended in), PULSE (width), TRI (wavefold), SINE (cross modulation from OSC 2) |
-| **OSC 2** | SAW, SQR, TRI · RING, SYNC or both · semitone, tune |
+| **OSC 1** | SAW (an octave-up saw blended in), PULSE (width), TRI (wavefold), SINE (cross modulation from OSC 2), MORPH (1.3: the saw to the square) |
+| **OSC 2** | SAW, SQR, TRI, MIX · RING, SYNC or both · semitone, tune |
 | **MIXER** | OSC 1, OSC 2, NOISE, and FOLD, a wavefolder before the filter |
-| **SUB / DRIFT** | (1.2) a sub oscillator, square or sine, one or two octaves below OSC 1 · DRIFT, analog age: every note a little out of tune, its own way |
+| **SUB / DRIFT** | a sub oscillator, square, sine, saw or a mix, one or two octaves below OSC 1 · DRIFT, analog age: every note a little out of tune, its own way |
 | **FILTER** | LPF24, LPF12, BPF, HPF and **MS20**, a driven 12 dB low-pass whose resonance screams · EG INT, KEY TRACK |
 | **EG / LFO** | FILTER EG and AMP EG · two LFOs (SAW, SQR, TRI, SIN, S&H) with key sync and tempo sync |
 | **PATCH 1–4** | FEG, AEG, LFO 1, LFO 2, velocity or keyboard to pitch, OSC 2, CTRL 1, noise, cutoff, amp or LFO 2's rate |
 | **VOICE** | POLY, MONO, LEGATO, UNISON (eight detuned oscillators) · DETUNE, PORTA, SPREAD |
 | **ARP / SEQ** | ten arp types over 1–4 octaves (1.1: ORDER, CONVERGE, PEDAL, DOUBLE) with latch and swing · a 16-step sequencer with ties, accents and slides |
 | **EFFECTS** | MOD FX (chorus, flanger, ensemble, phaser, METAL distortion), delay, reverb, in three orders |
-| **PROGRAMS** | 32: FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS, S&H TEXTURE, SUB BASS, WORN TAPE, AGED PAD… 24 factory sounds and eight free |
+| **PLAYING** | (1.3) SCALE LOCK in 16 scales, CHORD from one key, the MIDI mod wheel as vibrato or a patch source |
+| **PROGRAMS** | 32: FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS, SUB BASS, WORN TAPE, AGED PAD, SUPERSAW… 25 factory sounds and seven free |
 
 ## On the screen
 

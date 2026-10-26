@@ -347,14 +347,14 @@ static void p_chords(void)                          /* CHORD DIA7 in A minor: on
 }
 
 typedef struct { const char *file, *title, *text; void (*score)(void); int new; } piece_t;
-static const piece_t PIECES[] = {                   /* (1.2: four of 1.1's and four new) */
-    {"1_subbass", "Sub Bass", "A saw over the new SUB oscillator, a square an octave down: a line in E minor.", p_subbass, 1},
-    {"2_worntape", "Worn Tape", "DRIFT high: soft keys off a warped tape, every note its own way out of tune. Dm9, Bbmaj7, F/A, Gm9.", p_tape, 1},
-    {"3_sync", "Sync Pad", "Oscillator sync swept by an envelope, four voices wide: Dmaj7, Bm9, Gmaj7, Aadd9.", p_sync, 0},
-    {"4_polychorus", "Poly Chorus", "A pulse with PWM on a sub square, a lush chorus, a little DRIFT: Fmaj7, G6, Em7, Am9.", p_polych, 1},
-    {"5_arp", "Bright Arp", "The arpeggiator on held chords (Cm, Ab, Eb, Bb), in time with the tempo, the delay in time too.", p_arp, 0},
-    {"6_agedpad", "Aged Pad", "DRIFT all the way, a breath of noise, a sine two octaves down: Ebmaj9, Cm9, Abmaj7, Bb6.", p_aged, 1},
-    {"7_brass", "80s Brass", "Stabs of the brass patch on Eb, Bb, Cm, Ab: filter envelope on every hit.", p_brass, 0},
+static const piece_t PIECES[] = {                   /* (1.3: three new, five of before) */
+    {"1_supersaw", "Supersaw", "The new SUPERSAW: every voice on one note, eight saws spread wide and a saw sub. A trance lead on F#m, D, A, E.", p_supersaw, 1},
+    {"2_subbass", "Sub Bass", "A saw over the SUB oscillator, a square an octave down: a line in E minor.", p_subbass, 0},
+    {"3_chords", "Chord + Scale", "One note at a time: CHORD makes each one the seventh chord of A minor, SCALE LOCK keeps it in key.", p_chords, 1},
+    {"4_worntape", "Worn Tape", "DRIFT high: soft keys off a warped tape, every note its own way out of tune. Dm9, Bbmaj7, F/A, Gm9.", p_tape, 0},
+    {"5_morph", "Morph", "OSC 1's new MORPH wave, LFO 1 sweeping it from the saw to the square under the arpeggiator: Am, F, C, G.", p_morph, 1},
+    {"6_sync", "Sync Pad", "Oscillator sync swept by an envelope, four voices wide: Dmaj7, Bm9, Gmaj7, Aadd9.", p_sync, 0},
+    {"7_agedpad", "Aged Pad", "DRIFT all the way, a breath of noise, a sine two octaves down: Ebmaj9, Cm9, Abmaj7, Bb6.", p_aged, 0},
     {"8_acid", "Acid Sweep", "The squelchy line, with the cutoff opening and closing as the ALGORITHM knob does.", p_acid, 0},
 };
 

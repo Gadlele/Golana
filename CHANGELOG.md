@@ -3,7 +3,7 @@
 Golana's versions, newest first. The numbers: **X.Y** adds something (saved programs still open), **X.Y.Z** only
 fixes, a new **X** may change how things are saved.
 
-## 1.3 — unreleased
+## 1.3 — 2026-10-26
 
 - **OSC 1's CTRL 1 and CTRL 2 say what they do**: their names change with the WAVE (SAW: OCTAVE, OCT LFO; PULSE:
   WIDTH, PWM; TRI: FOLD, FOLD LFO; SINE: X-MOD, XMOD LFO), PULSE's WIDTH shows its duty in %, the drawing shows

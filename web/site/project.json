@@ -1,6 +1,6 @@
 {
   "name": "Golana",
-  "version": "1.2",
+  "version": "1.3",
   "sounds_sub": "Eight short pieces, each one factory program played as the FM-1 plays it: one synth, its four voices, its arpeggiator, delay and reverb. No effects added afterwards.",
   "tagline": "One analog-style synth for the M-VAVE FM-1, laid out like the classic microKORG, with a screen that draws the sound.",
   "lead": "The FM-1 as a single, deep analog-style synthesizer: two oscillators, five filters, two envelopes, two LFOs, a patch bay, an arpeggiator and a step sequencer. Every page draws what it does.",
@@ -16,15 +16,16 @@
   "device_sub": "Twelve buttons open the sections, as on the classic microKORG: EDIT the oscillators, SCL the filter, ENV the envelopes, LFO the LFOs and the patch bay, FX the effects. KNOB 1–4 always set the four cards on the screen, ALGORITHM is always the cutoff.",
   "features_sub": "A single voice architecture, explored in depth, with 32 programs.",
   "features": [
-    {"t": "Two oscillators and a sub", "p": "OSC 1: SAW with an octave-up blend, PULSE with width, TRI with a wavefolder, SINE with cross modulation. OSC 2: SAW, SQR or TRI with RING, SYNC or both, semitone and tune. New in 1.2: a SUB oscillator, square or sine, one or two octaves down.", "c": "#ffb547"},
+    {"t": "Two oscillators and a sub", "p": "OSC 1: SAW with an octave-up blend, PULSE with width, TRI with a wavefolder, SINE with cross modulation. OSC 2: SAW, SQR or TRI with RING, SYNC or both, semitone and tune. A SUB oscillator one or two octaves down (square, sine, saw or a mix). New in 1.3: OSC 1's MORPH, from the saw to the square, OSC 2's MIX, and cleaner wavefolders.", "c": "#ffb547"},
     {"t": "DRIFT", "p": "New in 1.2: analog age. Every note's oscillators a little out of tune, each its own way, slowly wandering, its filter a little off. From a touch of life to a worn-out tape.", "c": "#e0a070"},
     {"t": "Five filters", "p": "LPF24, LPF12, BPF, HPF and <b>MS20</b>, a driven 12 dB low-pass whose resonance screams. A FOLD stage before it, key tracking and its own envelope.", "c": "#ecd660"},
     {"t": "Envelopes and LFOs", "p": "FILTER EG and AMP EG; two LFOs (SAW, SQR, TRI, SIN, S&amp;H) with key sync and tempo sync. Four patch cords route any of them to pitch, cutoff, amp and more.", "c": "#f07a9c"},
     {"t": "Unison and glide", "p": "POLY, MONO, LEGATO and UNISON: four voices, or eight detuned oscillators in unison. DETUNE, PORTA, EG RESET and SPREAD across the stereo field.", "c": "#b092ff"},
+    {"t": "Scale, chords, mod wheel", "p": "New in 1.3: SCALE LOCK keeps every key and MIDI note in one of 16 scales; CHORD plays the scale's triads and sevenths, or fixed shapes, from one key; a MIDI keyboard's mod wheel is a vibrato or a source in the patch.", "c": "#b092ff"},
     {"t": "Arpeggiator and sequencer", "p": "Ten arp types (ORDER, CONVERGE, PEDAL and DOUBLE new in 1.1) over 1–4 octaves with latch, swing and steps on/off; a 16-step sequencer with notes, ties, accents and slides, saved with the program.", "c": "#5cceaa"},
     {"t": "Effects", "p": "MOD FX (chorus, flanger, ensemble, phaser, or METAL distortion), a stereo delay in time with the tempo and a reverb, in three orders.", "c": "#ff805c"},
-    {"t": "Pages that draw", "p": "Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws the sound playing, with a trail: TRAIL, ORBIT or RIDGE.", "c": "#66aaff"},
-    {"t": "32 programs", "p": "24 factory sounds (FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS; new in 1.2: SUB BASS, REESE, WORN TAPE, AGED PAD…) and eight free slots. MIDI Program Change picks them.", "c": "#ffb547"},
+    {"t": "Pages that draw", "p": "Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws the sound playing every frame, with a trail in a second colour: TRAIL, ORBIT or RIDGE.", "c": "#66aaff"},
+    {"t": "32 programs", "p": "25 factory sounds (FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SUB BASS, WORN TAPE, AGED PAD; new in 1.3: SUPERSAW…) and seven free slots. MIDI Program Change picks them.", "c": "#ffb547"},
     {"t": "Four palettes", "p": "NIGHT, CRT, PAPER and NEON. And a three-second power-on with the eighties' stripes.", "c": "#96d668"}
   ],
   "gallery_sub": "Real screens of Golana 1.0, taken from the emulator.",
