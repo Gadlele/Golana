@@ -104,7 +104,12 @@ static void midi_release(uint32_t ch, uint32_t note)
 static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
 {
     uint8_t nn[CHORD_MAX];
-    uint32_t n = chord_build(t, note, nn), i, f = 0;
+    uint32_t n, i, f = 0, key = note;
+#if GOLANA
+    if (t->p[P_QUANT] == QN_SNAP || t->p[P_QUANT] == QN_WHITE)   /* Golana's SCALE LOCK: MIDI notes too (rounded */
+        key = (uint32_t)clamp(scale_snap(t, (int32_t)note), 0, 127);   /* down, as the keys' SNAP) */
+#endif
+    n = chord_build(t, key, nn);
     if (n > 1u || nn[0] != note)
         for (f = 0; f < MCHORD_N && mchord[f].id; f++)
             ;

@@ -14,6 +14,7 @@ static uint32_t frames;
 static int16_t cut_from = -1, cut_to;               /* a cutoff sweep over the piece (ALGORITHM), -1 = none */
 static uint64_t nsamp;                              /* the samples rendered */
 static uint32_t total;                              /* the score's length, ms */
+static int wheel_sweep;                             /* the mod wheel up and back down over the piece (CC1) */
 static uint32_t cur_ms(void) { return (uint32_t)(nsamp * 1000u / FS); }
 static void run_ms(uint32_t ms)
 {
@@ -24,6 +25,11 @@ static void run_ms(uint32_t ms)
             uint32_t ph = cur_ms() * 2000u / total;    /* 0..2000 */
             int32_t k = ph < 1000u ? (int32_t)ph : 2000 - (int32_t)ph;
             trk[0].p[GL_CUTOFF] = (int16_t)(cut_from + (cut_to - cut_from) * (k < 0 ? 0 : k) / 1000);
+        }
+        if (wheel_sweep && total) {                 /* 0 for the first third, then up, held, and down at the end */
+            uint32_t ph = cur_ms() * 300u / total;
+            trk[0].mw = (uint8_t)(ph < 100u ? 0 : ph < 160u ? (ph - 100u) * 127u / 60u : ph < 260u ? 127u
+                                  : ph < 300u ? (300u - ph) * 127u / 40u : 0u);
         }
         mix_block(o, CTL);
         nsamp += CTL;
@@ -77,7 +83,9 @@ static void line(uint32_t bar, const uint8_t (*m)[2], uint32_t n, uint32_t vel) 
 }
 
 static const char *prog_name;
-static int16_t set_id = -1, set_v;                  /* one value changed from the program's (a comparison), -1 none */
+static int16_t sets[6][2];                          /* values changed from the program's (a comparison, a demo) */
+static uint32_t nset;
+static void setp(int32_t id, int32_t v) { sets[nset][0] = (int16_t)id; sets[nset++][1] = (int16_t)v; }
 static void prog(const char *name, uint32_t bpm)
 {
     int16_t v[P_COUNT];
@@ -100,8 +108,8 @@ static void prog(const char *name, uint32_t bpm)
         eng_mem_claim(&trk[k]);
     }
     gl_factory(pi, v, nm);
-    if (set_id >= 0)
-        v[set_id] = set_v;
+    for (k = 0; k < nset; k++)
+        v[sets[k][0]] = sets[k][1];
     gl_apply(&trk[0], v);
     trk[0].engine = trk[0].eng_req;
     song.sel = 0;
@@ -273,17 +281,69 @@ static void p_aged(void)                            /* AGED PAD: Ebmaj9 Cm9 Abma
 }
 static void p_tape_dry(void)                        /* (WORN TAPE without DRIFT, to compare) */
 {
-    set_id = GL_DRIFT;
-    set_v = 0;
+    setp(GL_DRIFT, 0);
     p_tape();
-    set_id = -1;
 }
 static void p_bass_nosub(void)                      /* (SUB BASS without its SUB, to compare) */
 {
-    set_id = GL_SUB;
-    set_v = 0;
+    setp(GL_SUB, 0);
     p_subbass();
-    set_id = -1;
+}
+
+/* ---- 1.3 ---- */
+static void p_supersaw(void)                        /* SUPERSAW: a trance lead, F#m D A E */
+{
+    static const uint8_t T[][2] = {{66, 3}, {69, 3}, {73, 2}, {74, 4}, {73, 2}, {71, 2}, {69, 3}, {71, 3}, {73, 2},
+                                   {76, 8}, {74, 3}, {73, 3}, {71, 2}, {69, 4}, {68, 4}, {69, 16}, {0, 0}};
+    uint32_t i, six = 0, r;
+    prog("SUPERSAW", 136);
+    for (r = 0; r < 2u; r++)
+        for (i = 0; T[i][1]; i++) {
+            if (T[i][0])
+                tie(six / 16u, six % 16u, T[i][0], T[i][1], 104);
+            six += T[i][1];
+        }
+}
+static void p_morph(void)                           /* MORPH: BRIGHT ARP with OSC 1's MORPH, LFO 1 sweeping it */
+{
+    static const uint8_t C[4][3] = {{45, 48, 52}, {41, 45, 48}, {48, 52, 55}, {43, 47, 50}};
+    uint32_t b;
+    setp(GL_O1WAVE, 4);
+    setp(GL_O1C1, 64);
+    setp(GL_O1C2, 60);
+    setp(GL_L1FREQ, 30);
+    setp(GL_L1KEY, 0);
+    prog("BRIGHT ARP", 116);
+    for (b = 0; b < 8u; b++)
+        chord(b, 0, C[b % 4u], 3, 16, 100);
+}
+static void p_wheel(void)                           /* the mod wheel: WARM LEAD, the wheel up in the middle */
+{
+    static const uint8_t T[][2] = {{64, 4}, {67, 4}, {69, 8}, {72, 4}, {71, 4}, {67, 8}, {69, 16}, {64, 4}, {67, 4},
+                                   {69, 8}, {74, 4}, {72, 4}, {71, 8}, {69, 16}, {0, 0}};
+    uint32_t i, six = 0;
+    prog("WARM LEAD", 90);
+    wheel_sweep = 1;
+    for (i = 0; T[i][1]; i++) {
+        tie(six / 16u, six % 16u, T[i][0], T[i][1], 100);
+        six += T[i][1];
+    }
+}
+static void p_chords(void)                          /* CHORD DIA7 in A minor: one note a time, sevenths of the scale */
+{
+    static const uint8_t R[8] = {57, 53, 60, 55, 57, 50, 52, 52};
+    uint32_t b;
+    setp(P_QUANT, 1);
+    setp(P_ROOT, 9);
+    setp(P_SCALE, 2);
+    setp(P_CHRD, 2);
+    setp(P_VOIC, 1);
+    prog("POLY CHORUS", 96);
+    for (b = 0; b < 8u; b++) {
+        nt(b, 0, R[b], 6, 100);
+        nt(b, 6, R[b], 4, 84);
+        nt(b, 10, R[b], 6, 92);
+    }
 }
 
 typedef struct { const char *file, *title, *text; void (*score)(void); int new; } piece_t;
@@ -311,11 +371,19 @@ static const piece_t PIECES12[] = {                 /* (render_sounds OUT 1.2: t
     {"n8_agedpad", "Aged Pad", "AGED PAD", p_aged},
 };
 
+static const piece_t PIECES13[] = {                 /* (render_sounds OUT 1.3) */
+    {"m1_supersaw", "Supersaw", "SUPERSAW", p_supersaw},
+    {"m2_morph", "Morph", "BRIGHT ARP with OSC 1 MORPH, LFO 1 on it", p_morph},
+    {"m3_wheel", "Mod wheel", "WARM LEAD, the mod wheel up in the middle", p_wheel},
+    {"m4_chords", "Chord + scale", "POLY CHORUS, CHORD DIA7 in A minor, single notes", p_chords},
+};
+
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
-    const piece_t *pieces = argc > 2 ? PIECES12 : PIECES;
-    uint32_t npieces = argc > 2 ? NELEM(PIECES12) : NELEM(PIECES);
+    int v13 = argc > 2 && !strcmp(argv[2], "1.3");
+    const piece_t *pieces = v13 ? PIECES13 : argc > 2 ? PIECES12 : PIECES;
+    uint32_t npieces = v13 ? NELEM(PIECES13) : argc > 2 ? NELEM(PIECES12) : NELEM(PIECES);
     char p[512];
     uint32_t n, i, a, b;
     FILE *js;
@@ -328,6 +396,8 @@ int main(int argc, char **argv)
         const piece_t *pc = &pieces[n];
         nev = 0;
         cut_from = -1;
+        nset = 0;
+        wheel_sweep = 0;
         pc->score();
         for (a = 1; a < nev; a++)                   /* in time (stable: an off before an on at the same time) */
             for (b = a; b > 0 && ev[b - 1u].t > ev[b].t; b--) {

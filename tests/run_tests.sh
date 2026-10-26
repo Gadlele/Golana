@@ -294,7 +294,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "GOLANA's screens (PPM in build/golana_preview)" "$OUT/golana_preview" build/golana_preview
     $CC $G1 -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/golana_sound" tests/golana_sound.c -lm
     mkdir -p build/golana_sound
-    run "GOLANA's 24 factory programs: no clipping, not silent, their tails end" "$OUT/golana_sound" build/golana_sound
+    run "GOLANA's 25 factory programs: no clipping, not silent, their tails end" "$OUT/golana_sound" build/golana_sound
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/audio_test" tests/audio_test.c -lm
     run "audio: overload protection, bounded fades and DMA diagnostics" "$OUT/audio_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/click_test" tests/click_test.c -lm

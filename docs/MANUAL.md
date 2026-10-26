@@ -8,16 +8,18 @@ Golana is free software under the GPL-3.0, like Felucca. Felucca's own README, f
 
 | Section | Parameters |
 | --- | --- |
-| OSC 1 | WAVE (SAW, PULSE, TRI, SINE), CTRL 1 and CTRL 2, named on the screen for what they do with the WAVE: SAW OCTAVE (an octave-up saw blended in) and OCT LFO; PULSE WIDTH (the duty, 50 % to 4 %) and PWM; TRI FOLD (wavefold) and FOLD LFO; SINE X-MOD (cross modulation from OSC 2) and XMOD LFO. CTRL 2 is LFO 1 moving CTRL 1: the drawing shows, faint, the two ends it reaches. The fourth card: LFO 1's rate |
-| OSC 2 | WAVE (SAW, SQR, TRI), MOD (OFF, RING, SYNC, R+S), SEMITONE, TUNE |
+| OSC 1 | WAVE (SAW, PULSE, TRI, SINE; 1.3: MORPH), CTRL 1 and CTRL 2, named on the screen for what they do with the WAVE: SAW OCTAVE (an octave-up saw blended in) and OCT LFO; PULSE WIDTH (the duty, 50 % to 4 %) and PWM; TRI FOLD (wavefold) and FOLD LFO; SINE X-MOD (cross modulation from OSC 2, a little shallower high up: in tune, without aliasing) and XMOD LFO; MORPH MORPH (from the saw to the square) and MRPH LFO. CTRL 2 is LFO 1 moving CTRL 1: the drawing shows, faint, the two ends it reaches. The fourth card: LFO 1's rate |
+| OSC 2 | WAVE (SAW, SQR, TRI; 1.3: MIX, a saw and a square at once), MOD (OFF, RING, SYNC, R+S), SEMITONE, TUNE |
 | MIXER | OSC 1, OSC 2, NOISE, FOLD (a wavefolder on the mix, before the filter) |
-| SUB/DRIFT | (1.2) SUB TYPE (-1 SQR, -2 SQR, -1 SINE, -2 SINE: a square or a sine one or two octaves below OSC 1, in step with it), SUB LEVEL (into the mixer, 0 off), DRIFT (analog age: each note's two oscillators a little out of tune, each its own way, slowly wandering, and its cutoff a little off; 0 off) |
+| SUB/DRIFT | (1.2) SUB TYPE (-1 SQR, -2 SQR, -1 SINE, -2 SINE; 1.3: -1 SAW, -2 SAW, -1 MIX, -2 MIX: one or two octaves below OSC 1, in step with it), SUB LEVEL (into the mixer, 0 off), DRIFT (analog age: each note's two oscillators a little out of tune, each its own way, slowly wandering, and its cutoff a little off; 0 off) |
+| SCALE | (1.3) LOCK (OFF; ON: every key and every MIDI note in the scale, rounded down onto it; WHITE: the white keys walk the scale, the black ones are silent, MIDI notes as ON), KEY (C .. B), SCALE (CHR, MAJ, MIN, DOR, MIX, PEN, MPEN, HARM, PHRY, LYD, LOC, MEL, BLUES, WHOLE, DIMHW, DIMWH) |
+| CHORD | (1.3) CHORD (OFF; DIA3 / DIA7: the triad / seventh of the scale on the key; MAJ, MIN, DOM7, MAJ7, MIN7, SUS4, POW), VOICING (CLOSE, OPEN, INV1, INV2, +OCT): a key or a MIDI note plays the chord (POLY; MONO, LEGATO and UNISON play its root) |
 | FILTER | TYPE (LPF24, LPF12, BPF, HPF, MS20: a driven 12 dB low-pass whose resonance screams), CUTOFF, RESO, EG INT, KEY TRACK |
 | FILTER EG / AMP EG | ATTACK, DECAY, SUSTAIN, RELEASE |
 | AMP | LEVEL, PANPOT, DIST, SPREAD (the voices across the stereo field) |
 | VOICE | ASSIGN (POLY, MONO, LEGATO, UNISON; 4 voices; in UNISON each voice's OSC 2 is detuned the other way: 8 detuned oscillators), DETUNE, PORTA, EG RESET |
 | LFO 1 / LFO 2 | WAVE (SAW, SQR, TRI, SIN, S&H), FREQ, KEY SYNC (OFF, TIMBRE, VOICE), TEMPO (sync to a note value) |
-| PATCH 1-4 | SOURCE (FEG, AEG, LFO1, LFO2, VELO, KBD), DEST (PITCH, OSC2, CTRL1, NOISE, CUTOFF, AMP, LFO2F), INTENSITY |
+| PATCH 1-4 | SOURCE (FEG, AEG, LFO1, LFO2, VELO, KBD; 1.3: MODW the MIDI mod wheel, MW*LFO1 / MW*LFO2 the LFO as deep as the wheel (MW*LFO2 to PITCH: a wheel vibrato), AFTER channel aftertouch), DEST (PITCH, OSC2, CTRL1, NOISE, CUTOFF, AMP, LFO2F), INTENSITY. With no route from the wheel, the mod wheel is a vibrato (5.5 Hz, up to ±40 cents) |
 | SEQUENCER | 16 steps saved with the program. PATTERN: STEP, NOTE, TYPE (REST, NOTE, TIE), ACC / SLIDE; a key writes its note into the step and moves on. SETUP: LENGTH 1-16, RES, GATE, SWING |
 | ARP | ON, TYPE (UP, DOWN, ALT1, ALT2, RANDOM, TRIGGER; 1.1: ORDER as pressed, CONVERGE from the ends to the middle, PEDAL the lowest note between the others, DOUBLE each note twice and its octave twice), RANGE 1-4, RES, GATE, SWING, LATCH, KEY SYNC, LAST STEP and steps on/off |
 | MOD FX | TYPE (CHORUS, FLANGER, ENSEMBLE, PHASER), SPEED, DEPTH, MIX; TYPE METAL (a high-gain distortion with a strong mid hump): GAIN, MID, MID FREQ (200 Hz - 5 kHz) |
@@ -26,10 +28,11 @@ Golana is free software under the GPL-3.0, like Felucca. Felucca's own README, f
 | GLOBAL | TEMPO, TUNE, CLOCK (INT, USB, TRS), MIDI IN (ALL, CH 1) |
 | SETUP | FX ORDER, saved with the program: MFX>DLY>REV (the default), DLY>MFX>REV (the MOD FX after the delay, the reverb fed from it), DLY>REV>MFX (the MOD FX last) |
 
-32 programs: 1-24 hold the factory sounds until written over (FAT BASS, ACID LINE, GLIDE LEAD, UNISON SAW,
+32 programs: 1-25 hold the factory sounds until written over (FAT BASS, ACID LINE, GLIDE LEAD, UNISON SAW,
 SYNC PAD, BRIGHT ARP, 80S BRASS, ORGAN, SOFT PAD, PHASE PAD, SLOW ARP, SOFT BELLS, DRONE, WARM LEAD, DARK UNISON,
-S&H TEXTURE; 1.2: SUB BASS, REESE, POLY CHORUS, OLD STRINGS, WORN TAPE, DRIFT LEAD, SUB ARP, AGED PAD), 25-32 start
-as INIT. A program you wrote keeps its slot: one written in 17-24 before 1.2 is still there. MIDI Program Change 0-31
+S&H TEXTURE; 1.2: SUB BASS, REESE, POLY CHORUS, OLD STRINGS, WORN TAPE, DRIFT LEAD, SUB ARP, AGED PAD; 1.3: SUPERSAW), 26-32
+start as INIT. A program you wrote keeps its slot: one written in 17-25 before 1.2 / 1.3 is still there. Every note
+starts its oscillators from their own point of the wave (1.3), as an analog synth's do. MIDI Program Change 0-31
 picks a program.
 
 ## The controls
@@ -41,7 +44,7 @@ picks a program.
 | ALGORITHM | CUTOFF, from any page |
 | PRESETS | the program (it loads as you turn; edits not written are lost, as on the original) |
 | HOME | PERFORM: cutoff, resonance, EG int, LFO 1 rate |
-| EDIT / SCL / ENV / LFO | OSC 1, OSC 2, MIXER, SUB/DRIFT / FILTER, KEY TRACK / FILTER EG, AMP EG / LFO 1, LFO 2, PATCH 1-4 (press again for the next) |
+| EDIT / SCL / ENV / LFO | OSC 1, OSC 2, MIXER, SUB/DRIFT / FILTER, KEY TRACK, SCALE, CHORD / FILTER EG, AMP EG / LFO 1, LFO 2, PATCH 1-4 (press again for the next) |
 | GLO / REC / SEQ / FX | AMP, VOICE, GLOBAL, SETUP (FX ORDER, PALETTE, HOME) / the sequencer: PATTERN, SETUP / the arpeggiator: ARP, TIMING, STEPS / MOD FX, DELAY, REVERB |
 
 The pages that set a shape draw it above their four knobs, from the values themselves: OSC 1 and OSC 2 their wave,

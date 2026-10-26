@@ -310,6 +310,54 @@ int main(int argc, char **argv)
         render(200);
         check(peak > 0.01f, "SUB BASS plays");
     }
+    /* 1.3: SCALE LOCK and CHORD (SCL's third and fourth pages), MIDI notes included; the mod wheel reaches the part */
+    {
+        uint32_t i, n;
+        int on;
+        gu_load(0);                               /* (FAT BASS: LEGATO; POLY for the chord) */
+        trk[0].p[P_VOICE] = V_POLY;
+        press(B_SCL);
+        for (i = 0; i < 4u && GU_PAGES[gu.page].k[0].id != P_QUANT; i++)
+            press(B_SCL);
+        check(GU_PAGES[gu.page].btn == B_SCL && GU_PAGES[gu.page].k[2].id == P_SCALE, "SCL: the SCALE page");
+        trk[0].p[P_QUANT] = 1;                    /* LOCK ON, C MAJ */
+        trk[0].p[P_ROOT] = 0;
+        trk[0].p[P_SCALE] = 1;
+        render(80);
+        shot("36_scale");
+        web_midi(0x90, 61, 100);                  /* C#4: C4 in C major */
+        render(60);
+        for (i = 0, on = 0; i < NVOICE; i++)
+            on |= trk[0].v[i].gate && trk[0].v[i].note == 60;
+        check(on, "SCALE LOCK: a MIDI C#4 plays C4");
+        web_midi(0x80, 61, 0);
+        render(400);
+        for (i = 0, on = 0; i < NVOICE; i++)
+            on |= trk[0].v[i].gate;
+        check(!on, "  and its note-off ends it");
+        trk[0].p[P_CHRD] = 3;                     /* CHORD MAJ */
+        press(B_SCL);
+        render(80);
+        shot("37_chord");
+        check(GU_PAGES[gu.page].k[0].id == P_CHRD, "SCL: the CHORD page");
+        web_midi(0x90, 62, 100);                  /* D4 (in the scale): the chord's shape on it */
+        render(60);
+        for (i = 0, n = 0; i < NVOICE; i++)
+            n += trk[0].v[i].gate != 0;
+        check(n == 3, "CHORD MAJ: a MIDI note plays three");
+        web_midi(0x80, 62, 0);
+        render(400);
+        for (i = 0, on = 0; i < NVOICE; i++)
+            on |= trk[0].v[i].gate;
+        check(!on, "  and they end with it");
+        trk[0].p[P_CHRD] = 0;
+        trk[0].p[P_QUANT] = 0;
+        web_midi(0xB0, 1, 100);
+        render(40);
+        check(trk[0].mw == 100, "CC1: the mod wheel reaches part 1");
+        web_midi(0xB0, 1, 0);
+        render(40);
+    }
     /* (UPDATE MODE's countdown is main.c's loop: not in the browser build) */
     printf("%s: %d failures\n", fails ? "FAIL" : "ok", fails);
     return fails ? 1 : 0;

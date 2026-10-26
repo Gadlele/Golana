@@ -74,6 +74,8 @@ static const char *const N_GCLOCK[] = {"INT", "USB", "TRS"};
 static const char *const N_GMIDI[] = {"ALL", "CH 1"};
 static const char *const N_GSTYPE[] = {"REST", "NOTE", "TIE"};
 static const char *const N_GSFLAG[] = {"OFF", "ACCENT", "SLIDE", "BOTH"};
+static const char *const N_GLOCK[] = {"OFF", "ON", "WHITE"};   /* (1.3) P_QUANT: OFF, SNAP, WHITE (seq.c QN_*) */
+static const char *const N_GKEY[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 /* the pages, grouped by the button that opens them (its pages side by side: the tabs). tab: the page's name on its
  * tab when it is open (after the button's name), tshort: on its tab while another page of the button is open */
 static const gu_page_t GU_PAGES[] = {
@@ -88,6 +90,10 @@ static const gu_page_t GU_PAGES[] = {
     {B_SCL, "FILTER", "FILTER",
      {{GL_FTYPE, "TYPE", 0}, {GL_CUTOFF, "CUTOFF", 0}, {GL_RESO, "RESO", 0}, {GL_FEGINT, "EG INT", 0}}},
     {B_SCL, "KEY TRACK", "KEY TRK", {{GL_KTRK, "KEY TRACK", 0}, {GV_NONE, 0, 0}, {GV_NONE, 0, 0}, {GV_NONE, 0, 0}}},
+    /* (1.3) SCALE LOCK: every key (and MIDI note) in the scale; CHORD: a key plays a chord (chord.c) */
+    {B_SCL, "SCALE", "SCALE",
+     {{P_QUANT, "LOCK", GN(N_GLOCK)}, {P_ROOT, "KEY", GN(N_GKEY)}, {P_SCALE, "SCALE", 0}, {GV_NONE, 0, 0}}},
+    {B_SCL, "CHORD", "CHORD", {{P_CHRD, "CHORD", 0}, {P_VOIC, "VOICING", 0}, {GV_NONE, 0, 0}, {GV_NONE, 0, 0}}},
     {B_ENV, "FILTER EG", "FILTER EG",
      {{GL_FA, "ATTACK", 0}, {GL_FD, "DECAY", 0}, {GL_FS, "SUSTAIN", 0}, {GL_FR, "RELEASE", 0}}},
     {B_ENV, "AMP EG", "AMP EG", {{P_ATK, "ATTACK", 0}, {P_DEC, "DECAY", 0}, {P_SUS, "SUSTAIN", 0}, {P_REL, "RELEASE", 0}}},

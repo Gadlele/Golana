@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Gadlele */
-/* Golana's 24 factory sounds (golana_prog.c gl_factory): each one's values that differ from INIT. 1..8 the
+/* Golana's 25 factory sounds (golana_prog.c gl_factory): each one's values that differ from INIT. 1..8 the
  * classic analog palette (basses, leads, brass, an arpeggio, an organ), 9..16 warm and ambient (pads, slow arps,
- * soft bells, a drone, a sweet lead, textures), 17..24 (1.2) made with the SUB oscillator and DRIFT.
+ * soft bells, a drone, a sweet lead, textures), 17..24 (1.2) made with the SUB oscillator and DRIFT, 25 (1.3) a
+ * supersaw.
  * Time values: 40 ~ 20 ms, 60 ~ 80 ms, 80 ~ 0.3 s, 90 ~ 0.7 s, 100 ~ 1.4 s, 110 ~ 3 s, 120 ~ 6 s (gen_tables.py).
  * LFO FREQ: 20 ~ 0.15 Hz, 40 ~ 0.4 Hz, 60 ~ 1.2 Hz, 85 ~ 4.4 Hz, 90 ~ 5.6 Hz.
  * PATCH k (0..3): SRC FEG AEG LFO1 LFO2 VELO KBD, DST PITCH OSC2 CTRL1 NOISE CUTOFF AMP LFO2F, INT +-63 */
@@ -207,6 +208,16 @@ static const gl_set_t F_AGEDPAD[] = {             /* saws and a breath of noise,
     S(GL_MFX, 4), S(P_IA, 12), S(P_IB, 100), S(P_IMIX, 110),
     S(GL_RTYPE, 2), S(GL_RSIZE, 118), S(GL_RDAMP, 75), S(P_REV, 70),
 };
+/* ---------------------------------------------------------------- 1.3 --- */
+static const gl_set_t F_SUPERSAW[] = {            /* every voice on the note, eight saws spread wide, a saw sub, an
+                                                   * ensemble: the trance lead (one note at a time, UNISON) */
+    S(P_VOICE, V_UNISON), S(P_DETUNE, 88), S(GL_O1WAVE, W_SAW), S(GL_O2WAVE, X_SAW), S(GL_O2TUNE, 11), S(GL_MIX2, 120),
+    S(GL_SUBTYPE, U_SAW1), S(GL_SUB, 35), S(GL_DRIFT, 20),
+    S(GL_FTYPE, F_LPF12), S(GL_CUTOFF, 108), S(GL_RESO, 10), S(GL_FEGINT, 8), S(GL_FD, 90), S(GL_FS, 100),
+    S(P_ATK, 4), S(P_SUS, 124), S(P_REL, 72), S(P_GLIDE, 18), S(P_LEVEL, 92), S(P_SPRD, 127),
+    S(GL_MFX, 3), S(P_IA, 28), S(P_IB, 80), S(P_IMIX, 100),
+    S(GL_DTYPE, 1), S(GL_DTIME, 10), S(GL_DFDBK, 45), S(P_DLY, 40), S(GL_RTYPE, 2), S(GL_RSIZE, 110), S(P_REV, 50),
+};
 
 static const gl_prog_t GL_FACTORY[] = {
     PROG("FAT BASS", F_FATBASS),
@@ -233,8 +244,9 @@ static const gl_prog_t GL_FACTORY[] = {
     PROG("DRIFT LEAD", F_DRIFTLEAD),
     PROG("SUB ARP", F_SUBARP),
     PROG("AGED PAD", F_AGEDPAD),
+    PROG("SUPERSAW", F_SUPERSAW),
 };
-_Static_assert(NELEM(GL_FACTORY) == GL_NFACT, "24 factory sounds");
+_Static_assert(NELEM(GL_FACTORY) == GL_NFACT, "25 factory sounds");
 #undef S
 #undef PROG
 #undef PSRC

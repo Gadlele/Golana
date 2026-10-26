@@ -2,12 +2,12 @@
  * Copyright (C) 2026 Gadlele, based on Felucca (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Golana's programs: a whole sound in part 1's parameters (the GOLANA engine's, core.h GL_*, and the part's own:
  * level, pan, amp EG, voice, arp, sends, the INSERT as MOD FX). gl_defaults fills an INIT program; GL_FACTORY
- * (below) are the 24 factory sounds, written as the values they change from it. gl_sync derives what the rest of
+ * (below) are the 25 factory sounds, written as the values they change from it. gl_sync derives what the rest of
  * the firmware reads from Golana's values: the arp's MODE (seq.c), the INSERT's TYPE (fx.c), and the delay and
  * reverb settings, which are global in Felucca (song.g) but belong to the program in Golana. */
 
 #define GL_NPROG 32u                    /* program slots (upreset.c's 32 user preset slots) */
-#define GL_NFACT 24u                    /* slots 1..24 hold the factory sounds until written over (1.2: 17..24) */
+#define GL_NFACT 25u                    /* slots 1..25 hold the factory sounds until written over (1.2: 17..24, 1.3: 25) */
 
 /* GL_ARPTYPE -> seq.c's AM_* (UP, DN, UPDN = ALT1, ALT2, RND, CHORD = TRIGGER; 1.1: ORD = ORDER, CONV = CONVERGE,
  * THUMB = PEDAL, DOUBLE) */

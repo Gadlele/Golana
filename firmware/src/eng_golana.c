@@ -18,8 +18,10 @@
  *           with the part's clock), TIMBRE (from 0 when the first key goes down), VOICE (from 0 every note)
  *   DRIFT   (1.2) analog age: every note's two oscillators a little off pitch, each its own way, slowly wandering,
  *           its cutoff a little off too, the oscillators free running (0: none, exactly as before)
- *   PATCH   4 routes SRC -> DST by INT (+-63): sources FEG AEG LFO1 LFO2 VELO KBD, destinations PITCH OSC2
- *           (OSC 2's pitch) CTRL1 NOISE CUTOFF AMP LFO2F (LFO 2's rate)
+ *   PATCH   4 routes SRC -> DST by INT (+-63): sources FEG AEG LFO1 LFO2 VELO KBD, (1.3) MODW (the MIDI mod wheel,
+ *           CC1), MW*LFO1 / MW*LFO2 (the LFO as deep as the wheel: MW*LFO2 -> PITCH a wheel vibrato), AFTER (channel
+ *           aftertouch); with no route from the wheel, the wheel is a vibrato of its own (5.5 Hz, up to +-40 ct).
+ *           Destinations PITCH, OSC2 (OSC 2's pitch), CTRL1, NOISE, CUTOFF, AMP, LFO2F (LFO 2's rate)
  * Felucca's track LFO, LFO DEST and matrix are not used by this engine (mod.c leaves it alone): their parameter
  * slots hold Golana's own values (core.h GL_*). At most 4 voices (POLY and UNISON). */
 
@@ -31,7 +33,8 @@ static const char *const N_GLWAVE[] = {"SAW", "SQR", "TRI", "SIN", "S&H"};
 static const char *const N_GLKEY[] = {"OFF", "TIMBRE", "VOICE"};
 static const char *const N_GLSYNC[] = {"OFF", "4BAR", "2BAR", "1/1", "1/2", "1/4", "1/8", "1/8T", "1/16", "16T", "1/32"};
 static const uint8_t GL_SYNC_DIV[11] = {0, 9, 8, 7, 6, 0, 1, 4, 2, 5, 3};   /* N_GLSYNC -> fx.c div_samples */
-static const char *const N_GPSRC[] = {"FEG", "AEG", "LFO1", "LFO2", "VELO", "KBD"};
+static const char *const N_GPSRC[] = {"FEG", "AEG", "LFO1", "LFO2", "VELO", "KBD",
+                                      "MODW", "MW*LFO1", "MW*LFO2", "AFTER"};   /* (1.3: the last four) */
 static const char *const N_GPDST[] = {"PITCH", "OSC2", "CTRL1", "NOISE", "CUTOFF", "AMP", "LFO2F"};
 static const char *const N_GARPT[] = {"UP", "DOWN", "ALT1", "ALT2", "RANDOM", "TRIGGER",
                                       "ORDER", "CONVERGE", "PEDAL", "DOUBLE"};   /* (1.1: the last four) */
@@ -43,7 +46,7 @@ static const char *const N_GONOFF[] = {"OFF", "ON"};
 static const char *const N_GSUB[] = {"-1 SQR", "-2 SQR", "-1 SINE", "-2 SINE", "-1 SAW", "-2 SAW", "-1 MIX", "-2 MIX"};
 static const char *const N_GDTIME[] = {"1/4", "1/8", "1/16", "1/32", "1/8T", "16T", "1/2", "1/1", "2BAR", "4BAR",
                                        "1/8D", "16D", "1/4D"};
-enum { GS_FEG, GS_AEG, GS_LFO1, GS_LFO2, GS_VELO, GS_KBD, GS_N };
+enum { GS_FEG, GS_AEG, GS_LFO1, GS_LFO2, GS_VELO, GS_KBD, GS_MODW, GS_MWL1, GS_MWL2, GS_AT, GS_N };
 enum { GD_PITCH, GD_OSC2, GD_CTRL1, GD_NOISE, GD_CUT, GD_AMP, GD_LFO2F, GD_N };
 enum { GO_SAW, GO_PULSE, GO_TRI, GO_SINE, GO_MORPH };
 enum { GM_OFF, GM_RING, GM_SYNC, GM_RSYNC };
@@ -113,6 +116,7 @@ typedef struct {
     uint16_t dn;                 /* DRIFT: blocks until the wander's next target */
     int16_t d1, d2, dc;          /* DRIFT: this note's offsets, OSC 1, OSC 2 and the cutoff (Q15, -1..1) */
     int16_t dw, dt;              /* DRIFT: the slow wander and its target (Q15) */
+    int32_t fx, fg, tx, tg;      /* (1.3) the folds' ADAA: FOLD's and TRI's last input and its antiderivative */
 } glv_t;
 typedef struct {
     glv_t v[NVOICE];
@@ -120,6 +124,7 @@ typedef struct {
     uint32_t tim1, tim2;         /* TIMBRE: from 0 when the first key goes down */
     uint32_t inc1, inc2;         /* this block's base increments */
     int32_t seed;
+    uint32_t vph;                /* (1.3) the wheel's own vibrato, its phase */
 } glp_t;
 ENG_MEM_FITS("GOLANA", sizeof(glp_t));
 static glp_t *gl_part(const track_t *t) { return (glp_t *)ENG_MEM((uint32_t)(t - trk) % NPART); }
@@ -167,6 +172,33 @@ static int32_t gl_lfo_step(uint32_t *ph, int32_t *sh, uint32_t inc, uint32_t wav
     return gl_wave(wave, *ph, *sh);
 }
 
+/* (1.3) the folders without their aliasing, ADAA (antiderivative anti-aliasing, first order). The fold is the
+ * triangle T(x) = a - |w|, w = x - a wrapped into [-2a, 2a) (period 4a, a = 1 << lg: T(0) = 0, rising); the output
+ * is T's mean between the last input and this one, (G(x) - G(x')) / (x - x'), G its antiderivative a w - w |w| / 2
+ * (periodic: T's mean is 0); inputs closer than 4 apart take T at their middle */
+static inline int32_t gl_tri_w(int32_t x, uint32_t lg)
+{
+    return (int32_t)(((uint32_t)x + (1u << lg)) & ((4u << lg) - 1u)) - (int32_t)(2u << lg);
+}
+static inline int32_t gl_tri_int(int32_t x, uint32_t lg)   /* (w (2a - |w|) <= a * a = 2^30: 32 bits, exact) */
+{
+    int32_t w = gl_tri_w(x, lg);
+    return (w * ((2 << lg) - (w < 0 ? -w : w))) >> 1;
+}
+static inline int32_t gl_fold_aa(int32_t x, int32_t *xp, int32_t *gp, uint32_t lg)
+{
+    int32_t g = gl_tri_int(x, lg), d = x - *xp, y;
+    if (d > 3 || d < -3) {
+        y = (g - *gp) / d;
+    } else {
+        int32_t w = gl_tri_w((x + *xp) >> 1, lg);
+        y = (1 << lg) - (w < 0 ? -w : w);
+    }
+    *xp = x;
+    *gp = g;
+    return y;
+}
+
 static void gol_block(track_t *t)
 {
     glp_t *g = gl_part(t);
@@ -176,6 +208,7 @@ static void gol_block(track_t *t)
     g->free2 += g->inc2;
     g->tim1 += g->inc1;
     g->tim2 += g->inc2;
+    g->vph += (uint32_t)((11ull << 31) / (FS / CTL));   /* 5.5 Hz */
     if (!g->seed)
         g->seed = 0x5EED1234;
 }
@@ -195,16 +228,16 @@ static void gol_note_on(track_t *t, voice_t *v)
         s->f1 = s->f2 = s->f3 = s->f4 = 0;
         s->feg = 0;
         s->jl = 0;
-        s->sc = 0;
-        v->ph[0] = 0;
-        v->ph[1] = 0x40000000u;
-        if (t->p[GL_DRIFT] > 0) {                       /* DRIFT: each note its own offsets, free-running oscillators */
+        v->ph[0] = noise32(&g->seed);                   /* (1.3) free-running oscillators: each note from its own */
+        v->ph[1] = noise32(&g->seed);                   /* point of the waves, as an analog synth's (1.2: from 0) */
+        s->sc = (uint8_t)(v->ph[1] >> 30);
+        s->fx = s->tx = 0;
+        s->fg = gl_tri_int(0, 14);
+        s->tg = gl_tri_int(0, 15);
+        if (t->p[GL_DRIFT] > 0) {                       /* DRIFT: each note its own offsets */
             s->d1 = (int16_t)(noise32(&g->seed) >> 16);
             s->d2 = (int16_t)(noise32(&g->seed) >> 16);
             s->dc = (int16_t)(noise32(&g->seed) >> 16);
-            v->ph[0] = noise32(&g->seed);
-            v->ph[1] = noise32(&g->seed);
-            s->sc = (uint8_t)(v->ph[1] >> 30);
         }
         s->l1 = gp(t, GL_L1KEY, 0, 2) == 2 ? 0u : gp(t, GL_L1KEY, 0, 2) == 1 ? g->tim1 : g->free1;
         s->l2 = gp(t, GL_L2KEY, 0, 2) == 2 ? 0u : gp(t, GL_L2KEY, 0, 2) == 1 ? g->tim2 : g->free2;
@@ -262,6 +295,34 @@ static inline int32_t gl_osc2(uint32_t w, uint32_t ph, uint32_t inc)
     return w == 1u ? osc_pulse(ph, inc, 0x80000000u) : w == 2u ? osc_tri(ph) : w == 3u ? gl_mix(ph, inc) : osc_saw(ph, inc);
 }
 
+/* DRIFT: the note's offsets and the wander (a new target every ~0.37 s, followed over about as long), in 1/4096 of
+ * the pitch (2.37 a cent: up to +-12 ct each oscillator, +-5 ct the wander) -> *df1, *df2, and in cutoff units (the
+ * return); (1.3) the wheel's own vibrato (wheel: no route plays the wheel), up to +-40 ct (95 / 4096). Out of line:
+ * gol_render's loop as it was */
+static __attribute__((noinline)) int32_t gl_drift(const track_t *t, glp_t *g, glv_t *s, int32_t drift, int32_t wheel,
+                                                  int32_t *df1, int32_t *df2)
+{
+    int32_t dcut = 0;
+    if (drift) {
+        int32_t dw;
+        if (!s->dn--) {
+            s->dn = 511;
+            s->dt = (int16_t)(noise32(&g->seed) >> 16);
+        }
+        s->dw = (int16_t)(s->dw + ((s->dt - s->dw) >> 9));
+        dw = (s->dw * drift) >> 15;
+        *df1 = (((s->d1 * drift) >> 15) * 28 >> 7) + (dw * 12 >> 7);
+        *df2 = (((s->d2 * drift) >> 15) * 28 >> 7) + (dw * 12 >> 7);
+        dcut = ((s->dc * drift) >> 15) * 5 + dw;
+    }
+    if (wheel && t->mw) {
+        int32_t vb = (((osc_sine(g->vph) * t->mw) >> 7) * 95) >> 15;
+        *df1 += vb;
+        *df2 += vb;
+    }
+    return dcut;
+}
+
 static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     glp_t *g = gl_part(t);
@@ -274,7 +335,7 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
     uint32_t inc1, inc2;
     tsvf_t f1c, f2c;
     int32_t k2, ring = md == GM_RING || md == GM_RSYNC, sync = md == GM_SYNC || md == GM_RSYNC;
-    int32_t dist = p[GL_DIST] != 0, drift = gp(t, GL_DRIFT, 0, 127), dw, df1 = 0, df2 = 0, dcut = 0;
+    int32_t dist = p[GL_DIST] != 0, drift = gp(t, GL_DRIFT, 0, 127), df1 = 0, df2 = 0, dcut = 0, wheel = 1;
     uint32_t st = (uint32_t)gp(t, GL_SUBTYPE, 0, 7), so = 1u + (st & 1u);   /* SUB: its type, its octaves down */
     /* control rate: the envelopes, the LFOs, the patch */
     feg = gl_feg_tick(t, v, s);
@@ -286,36 +347,31 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
     src[GS_KBD] = clamp(((int32_t)v->note - 60) * 512, -32767, 32767);
     lfo1 = gl_lfo_step(&s->l1, &s->s1, g->inc1, (uint32_t)gp(t, GL_L1WAVE, 0, 4), &g->seed);
     src[GS_LFO1] = lfo1;
+    src[GS_MODW] = t->mw * 258;
+    src[GS_AT] = t->at * 258;
+    src[GS_MWL1] = (lfo1 * t->mw) >> 7;
     {   /* LFO 2's rate may be patched: the routes to LFO2F first, from the sources known so far */
         int32_t f2 = 0;
         for (k = 0; k < 4u; k++) {
             int32_t a = gp(t, GL_P1INT + 3u * k, -63, 63), sr = gp(t, GL_P1SRC + 3u * k, 0, GS_N - 1);
-            if (a && gp(t, GL_P1DST + 3u * k, 0, GD_N - 1) == GD_LFO2F && sr != GS_LFO2)
+            if (a && gp(t, GL_P1DST + 3u * k, 0, GD_N - 1) == GD_LFO2F && sr != GS_LFO2 && sr != GS_MWL2)
                 f2 += (src[sr] * a) >> 14;
         }
         lfo2 = gl_lfo_step(&s->l2, &s->s2, f2 ? gl_lfo_inc(t, GL_L2FREQ, GL_L2SYNC, f2) : g->inc2,
                            (uint32_t)gp(t, GL_L2WAVE, 0, 4), &g->seed);
     }
     src[GS_LFO2] = lfo2;
+    src[GS_MWL2] = (lfo2 * t->mw) >> 7;
     for (k = 0; k < 4u; k++) {
-        int32_t a = gp(t, GL_P1INT + 3u * k, -63, 63);
+        int32_t a = gp(t, GL_P1INT + 3u * k, -63, 63), sr = gp(t, GL_P1SRC + 3u * k, 0, GS_N - 1);
         uint32_t ds = (uint32_t)gp(t, GL_P1DST + 3u * k, 0, GD_N - 1);
         if (a && ds != GD_LFO2F)
-            d[ds] += src[gp(t, GL_P1SRC + 3u * k, 0, GS_N - 1)] * a;     /* Q15 x 63 */
+            d[ds] += src[sr] * a;                       /* Q15 x 63 */
+        if (a && sr >= GS_MODW && sr <= GS_MWL2)
+            wheel = 0;                                  /* (a route plays the wheel: no vibrato of its own) */
     }
-    /* DRIFT: the note's offsets and the wander (a new target every ~0.37 s, followed over about as long), in
-     * 1/4096 of the pitch (2.37 a cent: up to +-12 ct each oscillator, +-5 ct the wander) and in cutoff units */
-    if (drift) {
-        if (!s->dn--) {
-            s->dn = 511;
-            s->dt = (int16_t)(noise32(&g->seed) >> 16);
-        }
-        s->dw = (int16_t)(s->dw + ((s->dt - s->dw) >> 9));
-        dw = (s->dw * drift) >> 15;
-        df1 = (((s->d1 * drift) >> 15) * 28 >> 7) + (dw * 12 >> 7);
-        df2 = (((s->d2 * drift) >> 15) * 28 >> 7) + (dw * 12 >> 7);
-        dcut = ((s->dc * drift) >> 15) * 5 + dw;
-    }
+    if (drift || (wheel && t->mw))
+        dcut = gl_drift(t, g, s, drift, wheel, &df1, &df2);
     /* pitches (1/16 semitone): the voice's (glide, unison, tune, bend in m), the patch */
     pitch1 = m->pitch16 + ((d[GD_PITCH] * 3) >> 15);
     pitch2 = pitch1 + gp(t, GL_O2SEMI, -24, 24) * 16 + ((d[GD_OSC2] * 3) >> 15);
@@ -349,7 +405,10 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
     {
         uint32_t ph0 = v->ph[0], ph1 = v->ph[1], pw, sc = s->sc;
         int32_t a1 = s->f1, a2 = s->f2, b1 = s->f3, b2 = s->f4, nst = s->nst, jl = s->jl;
+        int32_t fx = s->fx, fg = s->fg, tx = s->tx, tg = s->tg;
         int32_t xm = ctrl1 * 380;                       /* SINE: the cross modulation's depth (phase, Q16 of a cycle) */
+        if (m->pitch16 > 60 * 16)                       /* (1.3) halved an octave above C4, a third two above: in */
+            xm = xm * 192 / (192 + m->pitch16 - 60 * 16);   /* tune high up, without its aliasing */
         int32_t tfold = 32768 + ctrl1 * 768;            /* TRI: the fold's gain, Q15 (1 .. 4) */
         int32_t oct = ctrl1 * 129;                      /* SAW: the octave-up saw's share */
         int32_t mrph = ctrl1 * 258;                     /* MORPH: the square's share, Q15 */
@@ -373,13 +432,9 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
             case GO_PULSE:
                 o1 = osc_pulse(ph0, inc1, pw);
                 break;
-            case GO_TRI: {
-                int32_t u = (osc_tri(ph0) * (tfold >> 4)) >> 11;
-                u = (int32_t)((uint32_t)(u + 32768) & 0x1FFFFu);   /* reflect at the edges: a triangle of period 131072 */
-                u = u < 65536 ? u - 32768 : 98303 - u;
-                o1 = u;
+            case GO_TRI:                                /* reflected at the edges: a triangle of period 131072 */
+                o1 = gl_fold_aa((osc_tri(ph0) * (tfold >> 4)) >> 11, &tx, &tg, 15u);
                 break;
-            }
             case GO_SINE:
                 o1 = osc_sine(ph0 + (((uint32_t)o2 * (uint32_t)xm) << 1));   /* (wraps: a phase) */
                 break;
@@ -416,9 +471,7 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
                 sx += mulq15((int32_t)(noise32(&nst) >> 17) - 16384, xn);
             sx = (sx * 3) >> 3;                         /* one oscillator ~12 k into the filter, all three ~32 k */
             if (fold) {                                 /* FOLD: the wave reflected at +-16384, more folds the harder */
-                int32_t u = (clamp(sx, -65535, 65535) * (fold >> 2)) >> 10;
-                u = (int32_t)((uint32_t)(u + 16384) & 0xFFFFu) - 32768;
-                u = 16384 - (u < 0 ? -u : u);
+                int32_t u = gl_fold_aa((clamp(sx, -65535, 65535) * (fold >> 2)) >> 10, &fx, &fg, 14u);
                 sx = u + (u >> 2);                      /* (x 1.25: about the level it came in at) */
             }
             switch (ft) {
@@ -460,6 +513,10 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
         s->f3 = b1;
         s->f4 = b2;
         s->nst = nst;
+        s->fx = fx;
+        s->fg = fg;
+        s->tx = tx;
+        s->tg = tg;
         s->jl = jl;
     }
 }

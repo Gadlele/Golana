@@ -11,6 +11,17 @@ fixes, a new **X** may change how things are saved.
 - **HOME's scope, quicker and with a trail**: redrawn every frame with lines only, as Felucca's. A new view, **TRAIL**
   (the default): the wave now, the last ones behind it in the palette's second colour (NIGHT: orange and green),
   about 30 ms of sound (two or three cycles of a bass). ORBIT and RIDGE leave a trail too; TRAIL takes RING's place.
+- **New waves**: OSC 1's **MORPH** (CTRL 1 from the saw to the square), OSC 2's **MIX** (a saw and a square at
+  once), and four new SUB types: **-1 SAW, -2 SAW, -1 MIX, -2 MIX**.
+- **Cleaner oscillators**: the wavefolders (FOLD, TRI's fold) without most of their aliasing (ADAA), SINE's cross
+  modulation a little shallower high up (in tune, no whistling), and every note starts its oscillators from its own
+  point of the wave, as an analog synth's (the attacks a little alive, no longer all alike).
+- **Mod wheel** (MIDI CC1): a vibrato on its own, or, routed in the PATCH, the sources **MODW**, **MW*LFO1**,
+  **MW*LFO2** (an LFO as deep as the wheel) and **AFTER** (aftertouch).
+- **SCALE LOCK** (SCL › SCALE): every key and MIDI note in the scale you choose (16 scales, any key).
+- **CHORD** (SCL › CHORD): a key or a MIDI note plays a chord: the scale's own triad or seventh, or a fixed shape
+  (MAJ, MIN, DOM7, MAJ7, MIN7, SUS4, POW), in five voicings.
+- **SUPERSAW**, a new factory sound in program 25 (a program you wrote there stays).
 
 ## 1.2 — 2026-10-20
 
