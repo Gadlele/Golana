@@ -3,10 +3,10 @@
 /* GOLANA: the one engine of Golana, an analog-style synth after the classic microKORG layout.
  *
  *   OSC 1   SAW (CTRL1: a second saw an octave up blended in, brighter), PULSE (CTRL1: the width, 50 % .. ~5 %),
- *           TRI (CTRL1: folds the wave, more harmonics), SINE (CTRL1: cross modulation, OSC 2 moves its phase).
- *           CTRL2: LFO 1 on CTRL1 (PWM, a moving fold, a moving cross mod)
- *   OSC 2   SAW / SQR / TRI, MOD OFF / RING (OSC 1 x OSC 2) / SYNC (restarts with OSC 1) / R+S, SEMI +-24, TUNE +-63 ct
- *   SUB     (1.2) a square or a sine an octave or two below OSC 1, in step with it, its LEVEL into the mixer
+ *           TRI (CTRL1: folds the wave, more harmonics), SINE (CTRL1: cross modulation, OSC 2 moves its phase),
+ *           (1.3) MORPH (CTRL1: from the saw to the square). CTRL2: LFO 1 on CTRL1 (PWM, a moving fold, ...)
+ *   OSC 2   SAW / SQR / TRI / (1.3) MIX (a saw and a square at once), MOD OFF / RING (OSC 1 x OSC 2) / SYNC (restarts with OSC 1) / R+S, SEMI +-24, TUNE +-63 ct
+ *   SUB     (1.2) a square or a sine (1.3: a saw, a MIX) an octave or two below OSC 1, in step with it, its LEVEL into the mixer
  *   MIXER   OSC 1, OSC 2 and NOISE levels into the filter
  *   FOLD    a wavefolder on the mix before the filter (Buchla / Serge style): 0 off, up to ~8x into the folds
  *   FILTER  LPF24 (two state-variable stages, the resonance on the second), LPF12, BPF, HPF, MS20 (a 12 dB low-pass
@@ -23,8 +23,8 @@
  * Felucca's track LFO, LFO DEST and matrix are not used by this engine (mod.c leaves it alone): their parameter
  * slots hold Golana's own values (core.h GL_*). At most 4 voices (POLY and UNISON). */
 
-static const char *const N_GO1WAVE[] = {"SAW", "PULSE", "TRI", "SINE"};
-static const char *const N_GO2WAVE[] = {"SAW", "SQR", "TRI"};
+static const char *const N_GO1WAVE[] = {"SAW", "PULSE", "TRI", "SINE", "MORPH"};   /* (1.3: MORPH) */
+static const char *const N_GO2WAVE[] = {"SAW", "SQR", "TRI", "MIX"};               /* (1.3: MIX) */
 static const char *const N_GO2MOD[] = {"OFF", "RING", "SYNC", "R+S"};
 static const char *const N_GFTYPE[] = {"LPF24", "LPF12", "BPF", "HPF", "MS20"};
 static const char *const N_GLWAVE[] = {"SAW", "SQR", "TRI", "SIN", "S&H"};
@@ -40,12 +40,12 @@ static const char *const N_GRTYPE[] = {"ROOM", "SPRING", "HALL"};
 static const char *const N_GMFX[] = {"OFF", "CHORUS", "FLANGER", "ENSEMBL", "PHASER", "METAL"};
 static const char *const N_GROUTE[] = {"MFX>DLY>REV", "DLY>MFX>REV", "DLY>REV>MFX"};
 static const char *const N_GONOFF[] = {"OFF", "ON"};
-static const char *const N_GSUB[] = {"-1 SQR", "-2 SQR", "-1 SINE", "-2 SINE"};
+static const char *const N_GSUB[] = {"-1 SQR", "-2 SQR", "-1 SINE", "-2 SINE", "-1 SAW", "-2 SAW", "-1 MIX", "-2 MIX"};
 static const char *const N_GDTIME[] = {"1/4", "1/8", "1/16", "1/32", "1/8T", "16T", "1/2", "1/1", "2BAR", "4BAR",
                                        "1/8D", "16D", "1/4D"};
 enum { GS_FEG, GS_AEG, GS_LFO1, GS_LFO2, GS_VELO, GS_KBD, GS_N };
 enum { GD_PITCH, GD_OSC2, GD_CTRL1, GD_NOISE, GD_CUT, GD_AMP, GD_LFO2F, GD_N };
-enum { GO_SAW, GO_PULSE, GO_TRI, GO_SINE };
+enum { GO_SAW, GO_PULSE, GO_TRI, GO_SINE, GO_MORPH };
 enum { GM_OFF, GM_RING, GM_SYNC, GM_RSYNC };
 
 #define GPD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
@@ -254,10 +254,12 @@ static int32_t gl_feg_tick(const track_t *t, voice_t *v, glv_t *s)
     return s->feg >> 9;
 }
 
+/* a saw and a square at once, half each (OSC 2's MIX, the SUB's): the square's level (osc_pulse: +-16384) the saw's */
+static inline int32_t gl_mix(uint32_t ph, uint32_t inc) { return (osc_saw(ph, inc) >> 1) + osc_pulse(ph, inc, 0x80000000u); }
 /* OSC 2's wave at phase ph (increment inc) */
 static inline int32_t gl_osc2(uint32_t w, uint32_t ph, uint32_t inc)
 {
-    return w == 1u ? osc_pulse(ph, inc, 0x80000000u) : w == 2u ? osc_tri(ph) : osc_saw(ph, inc);
+    return w == 1u ? osc_pulse(ph, inc, 0x80000000u) : w == 2u ? osc_tri(ph) : w == 3u ? gl_mix(ph, inc) : osc_saw(ph, inc);
 }
 
 static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
@@ -265,7 +267,7 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
     glp_t *g = gl_part(t);
     glv_t *s = &g->v[(uint32_t)(v - t->v) % NVOICE];
     const int16_t *p = t->p;
-    uint32_t w1 = (uint32_t)gp(t, GL_O1WAVE, 0, 3), w2 = (uint32_t)gp(t, GL_O2WAVE, 0, 2);
+    uint32_t w1 = (uint32_t)gp(t, GL_O1WAVE, 0, 4), w2 = (uint32_t)gp(t, GL_O2WAVE, 0, 3);
     uint32_t md = (uint32_t)gp(t, GL_O2MOD, 0, 3), ft = (uint32_t)gp(t, GL_FTYPE, 0, 4), k, i;
     int32_t feg, lfo1, lfo2, src[GS_N], d[GD_N], ctrl1, cut, reso, x1, x2, xn, xs, gain;
     int32_t pitch1, pitch2, fold;
@@ -273,7 +275,7 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
     tsvf_t f1c, f2c;
     int32_t k2, ring = md == GM_RING || md == GM_RSYNC, sync = md == GM_SYNC || md == GM_RSYNC;
     int32_t dist = p[GL_DIST] != 0, drift = gp(t, GL_DRIFT, 0, 127), dw, df1 = 0, df2 = 0, dcut = 0;
-    uint32_t st = (uint32_t)gp(t, GL_SUBTYPE, 0, 3), so = 1u + (st & 1u);   /* SUB: its type, its octaves down */
+    uint32_t st = (uint32_t)gp(t, GL_SUBTYPE, 0, 7), so = 1u + (st & 1u);   /* SUB: its type, its octaves down */
     /* control rate: the envelopes, the LFOs, the patch */
     feg = gl_feg_tick(t, v, s);
     for (k = 0; k < GD_N; k++)
@@ -350,6 +352,7 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
         int32_t xm = ctrl1 * 380;                       /* SINE: the cross modulation's depth (phase, Q16 of a cycle) */
         int32_t tfold = 32768 + ctrl1 * 768;            /* TRI: the fold's gain, Q15 (1 .. 4) */
         int32_t oct = ctrl1 * 129;                      /* SAW: the octave-up saw's share */
+        int32_t mrph = ctrl1 * 258;                     /* MORPH: the square's share, Q15 */
         pw = 0x80000000u + (uint32_t)ctrl1 * 0xF00000u; /* PULSE: 50 % .. ~6 % */
         for (i = 0; i < n; i++) {
             int32_t o1, o2, sx, y;
@@ -380,6 +383,11 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
             case GO_SINE:
                 o1 = osc_sine(ph0 + (((uint32_t)o2 * (uint32_t)xm) << 1));   /* (wraps: a phase) */
                 break;
+            case GO_MORPH: {                            /* (1.3) CTRL 1 from the saw to the square */
+                int32_t sw = osc_saw(ph0, inc1);
+                o1 = sw + mulq15((osc_pulse(ph0, inc1, 0x80000000u) << 1) - sw, mrph);
+                break;
+            }
             default:
                 o1 = osc_saw(ph0, inc1);
                 if (oct)
@@ -390,8 +398,10 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
                 o2 = mulq15(o1, o2);
             sx = mulq15(o1, x1) + mulq15(o2, x2);
             if (xs) {                                   /* SUB: OSC 1's phase an octave or two down, OSC 1's cycles above it */
-                uint32_t sp = sc << (32u - so) | ph0 >> so;
-                sx += mulq15(st >= 2u ? osc_sine(sp) : osc_pulse(sp, inc1 >> so, 0x80000000u), xs);
+                uint32_t sp = sc << (32u - so) | ph0 >> so, si = inc1 >> so;
+                int32_t u = st < 2u ? osc_pulse(sp, si, 0x80000000u) : st < 4u ? osc_sine(sp)
+                          : st < 6u ? osc_saw(sp, si) : gl_mix(sp, si);   /* SQR, SINE, (1.3) SAW, MIX */
+                sx += mulq15(u, xs);
             }
             ph0 += inc1;
             ph1 += inc2;
@@ -463,10 +473,10 @@ static const engine_t ENG_GOLANA = {
     .name = "GOLANA",
     .page_title = {"OSC", "OSC2"},
     .edit = {
-        {"WAVE", F_ENUM, 0, 3, 0, N_GO1WAVE, 0},
+        {"WAVE", F_ENUM, 0, 4, 0, N_GO1WAVE, 0},
         {"CTRL1", F_INT, 0, 127, 0, 0, 0},
         {"CTRL2", F_INT, 0, 127, 0, 0, 0},
-        {"WAVE2", F_ENUM, 0, 2, 0, N_GO2WAVE, 0},
+        {"WAVE2", F_ENUM, 0, 3, 0, N_GO2WAVE, 0},
         {"MOD", F_ENUM, 0, 3, 0, N_GO2MOD, 0},
         {"SEMI", F_SEMI, -24, 24, 0, 0, 0},
         {"TUNE", F_INT, -63, 63, 0, 0, "ct"},

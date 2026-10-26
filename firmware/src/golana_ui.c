@@ -530,16 +530,17 @@ static void gu_draw_foot(void)
 static const gu_par_t *gu_pk(const gu_page_t *pg, uint32_t k)
 {
     static const gu_par_t METAL[3] = {{P_IA, "GAIN", 0}, {P_IB, "MID", 0}, {P_IC, "MID FREQ", 0}};
-    static const gu_par_t CTRL[4][2] = {
+    static const gu_par_t CTRL[5][2] = {
         {{GL_O1C1, "OCTAVE", 0}, {GL_O1C2, "OCT LFO", 0}},      /* SAW: the octave-up saw blended in */
         {{GL_O1C1, "WIDTH", 0}, {GL_O1C2, "PWM", 0}},          /* PULSE: 50 % .. ~6 % */
         {{GL_O1C1, "FOLD", 0}, {GL_O1C2, "FOLD LFO", 0}},      /* TRI: folded */
         {{GL_O1C1, "X-MOD", 0}, {GL_O1C2, "XMOD LFO", 0}},     /* SINE: OSC 2 moves its phase */
+        {{GL_O1C1, "MORPH", 0}, {GL_O1C2, "MRPH LFO", 0}},     /* (1.3) MORPH: the saw to the square */
     };
     if (pg->k[0].id == GL_MFX && k && gu_t()->p[GL_MFX] == 5)
         return &METAL[k - 1u];
     if (pg->k[0].id == GL_O1WAVE && (k == 1u || k == 2u))
-        return &CTRL[clamp(gu_t()->p[GL_O1WAVE], 0, 3)][k - 1u];
+        return &CTRL[clamp(gu_t()->p[GL_O1WAVE], 0, 4)][k - 1u];
     return &pg->k[k];
 }
 #define GU_TAB_Y 32

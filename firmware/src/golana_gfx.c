@@ -190,7 +190,11 @@ static void gu_home_ridge(int32_t w, int32_t h, uint16_t acc, uint16_t surf)
 /* -------------------------------------------------------------- OSC 1 / 2 --- */
 static int32_t gu_osc1_at(const int16_t *p, int32_t c1, uint32_t ph, uint32_t ph2)
 {
-    switch (clamp(p[GL_O1WAVE], 0, 3)) {
+    switch (clamp(p[GL_O1WAVE], 0, 4)) {
+    case 4: {                                          /* MORPH: the saw to the square */
+        int32_t a = (int32_t)(ph >> 16) - 32768, b = ph < 0x80000000u ? -26000 : 26000;
+        return a + (((b - a) * c1) >> 7);
+    }
     case 1:
         return ph < 0x80000000u + (uint32_t)c1 * 0xF00000u ? 26000 : -26000;
     case 2: {
@@ -228,7 +232,7 @@ static void gu_osc(int32_t w, int32_t h, uint32_t two, uint16_t acc, uint16_t su
             if (!two) {
                 v = gu_osc1_at(p, cc, ph, ph2);
             } else {
-                v = gl_osc2((uint32_t)clamp(p[GL_O2WAVE], 0, 2), ph2, 0);
+                v = gl_osc2((uint32_t)clamp(p[GL_O2WAVE], 0, 3), ph2, 0);
                 if (md == 1 || md == 3)
                     v = mulq15(v, gu_osc1_at(p, c1, ph, ph2));
             }

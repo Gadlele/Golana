@@ -11,13 +11,13 @@
 #define PSRC(k) (GL_P1SRC + 3 * (k))
 #define PDST(k) (GL_P1DST + 3 * (k))
 #define PINT(k) (GL_P1INT + 3 * (k))
-enum { W_SAW, W_PULSE, W_TRI, W_SINE };
-enum { X_SAW, X_SQR, X_TRI };
+enum { W_SAW, W_PULSE, W_TRI, W_SINE, W_MORPH };
+enum { X_SAW, X_SQR, X_TRI, X_MIX };
 enum { L_SAW, L_SQR, L_TRI, L_SIN, L_SH };
 enum { F_LPF24, F_LPF12, F_BPF, F_HPF };
 enum { Q_FEG, Q_AEG, Q_LFO1, Q_LFO2, Q_VELO, Q_KBD };
 enum { D_PITCH, D_OSC2, D_CTRL1, D_NOISE, D_CUT, D_AMP, D_LFO2F };
-enum { U_SQR1, U_SQR2, U_SIN1, U_SIN2 };          /* SUB TYPE: -1 SQR, -2 SQR, -1 SINE, -2 SINE */
+enum { U_SQR1, U_SQR2, U_SIN1, U_SIN2, U_SAW1, U_SAW2, U_MIX1, U_MIX2 };   /* SUB TYPE: -1 SQR .. -2 MIX */
 
 /* ------------------------------------------------------------- classic --- */
 static const gl_set_t F_FATBASS[] = {             /* two oscillators an octave apart, a round 24 dB filter */
