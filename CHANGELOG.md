@@ -8,6 +8,9 @@ fixes, a new **X** may change how things are saved.
 - **OSC 1's CTRL 1 and CTRL 2 say what they do**: their names change with the WAVE (SAW: OCTAVE, OCT LFO; PULSE:
   WIDTH, PWM; TRI: FOLD, FOLD LFO; SINE: X-MOD, XMOD LFO), PULSE's WIDTH shows its duty in %, the drawing shows
   faintly how far CTRL 2 (LFO 1) moves the wave, and the page's fourth card is LFO 1's rate.
+- **HOME's scope, quicker and with a trail**: redrawn every frame with lines only, as Felucca's. A new view, **TRAIL**
+  (the default): the wave now, the last ones behind it in the palette's second colour (NIGHT: orange and green),
+  about 30 ms of sound (two or three cycles of a bass). ORBIT and RIDGE leave a trail too; TRAIL takes RING's place.
 
 ## 1.2 — 2026-10-20
 

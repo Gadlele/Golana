@@ -2,14 +2,15 @@
  * Copyright (C) 2026 Gadlele */
 /* Golana's drawings (golana_ui.c): above the cards of the pages that have one, a picture of what the page sets, from
  * the values themselves, redrawn as they change:
- *   HOME       the sound playing, from the scope buffer (fx.c scope_buf: what goes out), three ways (GLO SETUP HOME):
- *              RING the wave wrapped round a circle, ORBIT the wave against itself a moment later (a phase portrait:
- *              every timbre draws its own figure), RIDGE the last waves stacked, the newest in front
+ *   HOME       the sound playing, from the scope buffer (fx.c scope_buf: what goes out), three ways (GLO SETUP HOME),
+ *              every frame (1.3): TRAIL the wave with the last ones behind it in a second colour, ORBIT the wave
+ *              against itself a moment later (a phase portrait: every timbre draws its own figure), RIDGE the last
+ *              waves stacked, the newest in front
  *   OSC 1/2    a cycle and a half of the oscillator as its WAVE, CTRL 1, MOD and SEMITONE make it
  *   FILTER     the response, dB over a log frequency axis (30 Hz .. 16 kHz), the cutoff marked
  *   FILTER EG, AMP EG   the four stages, their lengths as the times, the sustain as its level
  *   LFO 1/2    the wave, as many cycles as its rate, running
- * Integer only (no FPU); the live ones (HOME, the LFOs) redraw every GU_LIVE_FRAMES frames, the others on a change. */
+ * Integer only (no FPU); HOME redraws every frame, the LFOs every GU_LIVE_FRAMES frames, the others on a change. */
 
 enum { GG_NONE, GG_HOME, GG_OSC1, GG_OSC2, GG_FILT, GG_FEG, GG_AEG, GG_LFO1, GG_LFO2 };
 #define GU_LIVE_FRAMES 3u
@@ -53,16 +54,22 @@ static void gu_curve(int32_t x0, const int16_t *y, uint32_t n, int32_t yb, uint1
 }
 
 /* ------------------------------------------------------------------ HOME --- */
+/* 1.3: every view drawn every frame, lines only (as Felucca's scope), the last ones behind as a trail */
+#define GH_TRAIL 5u               /* TRAIL: the waves behind the one now */
+#define GH_ORB 4u                 /* ORBIT: the figures behind */
 static struct {
     int32_t gain;                 /* the auto gain, Q8 (the scope's quiet sounds made visible) */
+    uint8_t tr[GH_TRAIL][224];    /* TRAIL: the last waves' rows, [0] the oldest */
+    uint8_t ox[GH_ORB][192], oy[GH_ORB][192];   /* ORBIT: the last figures */
     int16_t ridge[7][56];         /* RIDGE: the last waves, [0] the oldest */
-    uint8_t nridge, tick;
+    uint8_t ntr, norb, nridge;
 } gh;
 
-/* the last n scope samples from a rising zero crossing (a still picture of a steady wave) -> s[]; their peak */
-static int32_t gu_scope_take(int16_t *s, uint32_t n)
+/* n scope samples, every stride-th, from a rising zero crossing (a still picture of a steady wave) -> s[]; their
+ * peak */
+static int32_t gu_scope_take(int16_t *s, uint32_t n, uint32_t stride)
 {
-    uint32_t w = scope_w, i, start = w - n - 1u, best = start;
+    uint32_t w = scope_w, i, start = w - n * stride - 1u, best = start;
     int32_t pk = 0;
     for (i = 0; i < 160u; i++) {                       /* a rising crossing in the 160 samples before */
         uint32_t a = start - i;
@@ -72,7 +79,7 @@ static int32_t gu_scope_take(int16_t *s, uint32_t n)
         }
     }
     for (i = 0; i < n; i++) {
-        s[i] = scope_buf[(best + i) & (SCOPE_N - 1u)];
+        s[i] = scope_buf[(best + i * stride) & (SCOPE_N - 1u)];
         pk = s[i] > pk ? s[i] : -s[i] > pk ? -s[i] : pk;
     }
     return pk;
@@ -86,69 +93,96 @@ static int32_t gu_scope_gain(int32_t pk)
     gh.gain = !gh.gain || want < gh.gain ? want : gh.gain + ((want - gh.gain) >> 4);
     return gh.gain;
 }
-
-static void gu_home_ring(int32_t w, int32_t h, uint16_t acc, uint16_t surf)
+/* the trail's colour age frames back (1 .. 5): the palette's second colour (NIGHT: green), fading into the surface */
+static uint16_t gu_trail_col(uint32_t age, uint32_t n, uint16_t surf)
 {
-    int16_t s[128], x[129], y[129];
-    int32_t g = gu_scope_gain(gu_scope_take(s, 128)), cx = w / 2, cy = h / 2, r0 = h / 2 - 16, i;
-    uint32_t a;
-    for (a = 0; a < 64u; a++) {                        /* the circle at rest, dotted */
-        uint32_t ph = a << 26;
-        cv_pset(cx + (r0 * osc_sine(ph + 0x40000000u) >> 15), cy + (r0 * osc_sine(ph) >> 15), ux_mix(surf, acc, 40));
-    }
-    for (i = 0; i <= 128; i++) {
-        int32_t v = clamp((s[i & 127] * g) >> 8, -32767, 32767), r = r0 + (v * 13 >> 15);
-        uint32_t ph = (uint32_t)i << 25;               /* 128 points: a whole turn */
-        x[i] = (int16_t)(cx + (r * osc_sine(ph + 0x40000000u) >> 15));
-        y[i] = (int16_t)(cy + (r * osc_sine(ph) >> 15));
-    }
-    gu_poly(x, y, 129, acc);
+    static const uint8_t PCT[6] = {100, 78, 59, 42, 26, 13};
+    return ux_mix(surf, GU_P->btn[6], PCT[age * 5u / n]);
 }
 
+/* TRAIL: ~30 ms of what goes out (2-3 cycles of a bass), the wave now in the page's colour, the last ones behind it
+ * in the trail's: a steady sound one sharp wave, a moving one (the filter, PWM, DRIFT) a glowing wake */
+static void gu_home_trail(int32_t w, int32_t h, uint16_t acc, uint16_t surf)
+{
+    int16_t s[224];
+    int32_t g = gu_scope_gain(gu_scope_take(s, 224, 3)), cy = h / 2, k = h / 2 - 8, i;
+    uint32_t j, a;
+    (void)w;
+    if (gh.ntr == GH_TRAIL)
+        for (j = 0; j + 1u < GH_TRAIL; j++)
+            memcpy(gh.tr[j], gh.tr[j + 1u], sizeof gh.tr[0]);
+    else
+        gh.ntr++;
+    for (i = 0; i < 224; i++)
+        gh.tr[gh.ntr - 1u][i] = (uint8_t)clamp(cy - (clamp((s[i] * g) >> 8, -32767, 32767) * k >> 15), 1, h - 3);
+    cv_rect(8, cy, 224, 1, ux_mix(surf, acc, 20));
+    for (j = 0; j < gh.ntr; j++) {                     /* the oldest first: the newer over it */
+        const uint8_t *y = gh.tr[j];
+        uint16_t c = (a = gh.ntr - 1u - j) ? gu_trail_col(a, GH_TRAIL + 1u, surf) : acc;
+        for (i = 1; i < 224; i++) {
+            cv_line(8 + i - 1, y[i - 1], 8 + i, y[i], c);
+            if (!a)
+                cv_line(8 + i - 1, y[i - 1] + 1, 8 + i, y[i] + 1, c);
+        }
+    }
+}
+
+/* ORBIT: the wave against itself 8 samples (0.36 ms) later, a phase portrait: every timbre its own figure; the last
+ * figures behind in the trail's colour */
 static void gu_home_orbit(int32_t w, int32_t h, uint16_t acc, uint16_t surf)
 {
-    int16_t s[200], x[192], y[192];
-    int32_t g = gu_scope_gain(gu_scope_take(s, 200)), cx = w / 2, cy = h / 2, k = h / 2 - 6, i;
+    int16_t s[200];
+    int32_t g = gu_scope_gain(gu_scope_take(s, 200, 1)), cx = w / 2, cy = h / 2, k = h / 2 - 6, i;
+    uint32_t j, a;
     cv_rect(cx - k, cy, 2 * k, 1, ux_mix(surf, acc, 25));
     cv_rect(cx, cy - k, 1, 2 * k, ux_mix(surf, acc, 25));
-    for (i = 0; i < 192; i++) {                        /* x: the wave now, y: 8 samples (0.36 ms) later */
-        int32_t a = clamp((s[i] * g) >> 8, -32767, 32767), b = clamp((s[i + 8] * g) >> 8, -32767, 32767);
-        x[i] = (int16_t)(cx + (a * (k + 20) >> 15));
-        y[i] = (int16_t)(cy - (b * k >> 15));
+    if (gh.norb == GH_ORB)
+        for (j = 0; j + 1u < GH_ORB; j++) {
+            memcpy(gh.ox[j], gh.ox[j + 1u], sizeof gh.ox[0]);
+            memcpy(gh.oy[j], gh.oy[j + 1u], sizeof gh.oy[0]);
+        }
+    else
+        gh.norb++;
+    for (i = 0; i < 192; i++) {
+        int32_t p = clamp((s[i] * g) >> 8, -32767, 32767), q = clamp((s[i + 8] * g) >> 8, -32767, 32767);
+        gh.ox[gh.norb - 1u][i] = (uint8_t)clamp(cx + (p * (k + 20) >> 15), 1, w - 3);
+        gh.oy[gh.norb - 1u][i] = (uint8_t)clamp(cy - (q * k >> 15), 1, h - 3);
     }
-    gu_poly(x, y, 96, ux_mix(surf, acc, 55));          /* the older half fainter */
-    gu_poly(x + 95, y + 95, 97, acc);
+    for (j = 0; j < gh.norb; j++) {
+        const uint8_t *x = gh.ox[j], *y = gh.oy[j];
+        uint16_t c = (a = gh.norb - 1u - j) ? gu_trail_col(a, GH_ORB + 1u, surf) : acc;
+        for (i = 1; i < 192; i++) {
+            cv_line(x[i - 1], y[i - 1], x[i], y[i], c);
+            if (!a)
+                cv_line(x[i - 1] + 1, y[i - 1], x[i] + 1, y[i], c);
+        }
+    }
 }
 
+/* RIDGE: the last waves stacked, the newest in front, a new one every frame; lines only */
 static void gu_home_ridge(int32_t w, int32_t h, uint16_t acc, uint16_t surf)
 {
-    int16_t s[224], y[56];
-    int32_t g, j, i, step = (h - 24) / 6, amp = step + 6;
-    if (!(gh.tick++ & 1u) || !gh.nridge) {             /* a new wave every other drawing */
-        g = gu_scope_gain(gu_scope_take(s, 224));
-        if (gh.nridge == 7u)
-            for (j = 0; j < 6; j++)                     /* (no memmove in the firmware's libc) */
-                memcpy(gh.ridge[j], gh.ridge[j + 1], sizeof gh.ridge[0]);
-        else
-            gh.nridge++;
-        for (i = 0; i < 56; i++)
-            gh.ridge[gh.nridge - 1u][i] = (int16_t)clamp((s[i * 4] * g) >> 8, -32767, 32767);
-    }
-    for (j = 0; j < (int32_t)gh.nridge; j++) {         /* the oldest at the top, behind; each one hides what is under */
-        int32_t base = 14 + (j + 7 - (int32_t)gh.nridge) * step;
-        uint16_t c = ux_mix(surf, acc, 30 + j * 10);
+    int16_t s[56], y[56];
+    int32_t g = gu_scope_gain(gu_scope_take(s, 56, 12)), j, i, step = (h - 24) / 6, amp = step + 6;
+    if (gh.nridge == 7u)
+        for (j = 0; j < 6; j++)                         /* (no memmove in the firmware's libc) */
+            memcpy(gh.ridge[j], gh.ridge[j + 1], sizeof gh.ridge[0]);
+    else
+        gh.nridge++;
+    for (i = 0; i < 56; i++)
+        gh.ridge[gh.nridge - 1u][i] = (int16_t)clamp((s[i] * g) >> 8, -32767, 32767);
+    for (j = 0; j < (int32_t)gh.nridge; j++) {         /* the oldest at the top, faint */
+        int32_t base = 14 + (j + 7 - (int32_t)gh.nridge) * step, row = j + 7 - (int32_t)gh.nridge;
+        uint16_t c = row == 6 ? acc : gu_trail_col((uint32_t)(6 - row), 7u, surf);
         for (i = 0; i < 56; i++) {
             int32_t v = gh.ridge[j][i], env = i < 8 ? i : i > 47 ? 55 - i : 8;   /* the ends calm, as the cover's */
-            y[i] = (int16_t)(base - ((v < 0 ? -v : v) * amp * env >> 18) - (v * amp >> 17));
+            y[i] = (int16_t)clamp(base - ((v < 0 ? -v : v) * amp * env >> 18) - (v * amp >> 17), 1, h - 3);
         }
         for (i = 0; i < 55; i++) {
-            int32_t x0 = 8 + i * (w - 16) / 55, x1 = 8 + (i + 1) * (w - 16) / 55, xx;
-            for (xx = x0; xx < x1; xx++) {
-                int32_t yy = y[i] + (y[i + 1] - y[i]) * (xx - x0) / (x1 - x0);
-                cv_rect(xx, yy, 1, h - yy, surf);      /* (the painter's way: the band under the line hidden) */
-            }
+            int32_t x0 = 8 + i * (w - 16) / 55, x1 = 8 + (i + 1) * (w - 16) / 55;
             cv_line(x0, y[i], x1, y[i + 1], c);
-            cv_line(x0, y[i] + 1, x1, y[i + 1] + 1, c);
+            if (row == 6)
+                cv_line(x0, y[i] + 1, x1, y[i + 1] + 1, c);
         }
     }
 }
@@ -314,7 +348,7 @@ static void gu_draw_graph(uint32_t g)
     for (i = 0; i < sizeof IDS; i++)
         sig = gu_hashv(sig, p[IDS[i]]);
     sig = gu_hashv(sig, (int32_t)(g | gu_pi << 8 | gu_view << 12));
-    if (live ? gu_frame % GU_LIVE_FRAMES && sig == gu_sig_graph : sig == gu_sig_graph)
+    if (live ? g != GG_HOME && gu_frame % GU_LIVE_FRAMES && sig == gu_sig_graph : sig == gu_sig_graph)
         return;
     gu_sig_graph = sig;
     cv_begin((uint32_t)w, (uint32_t)h, GC_BG);
@@ -326,7 +360,7 @@ static void gu_draw_graph(uint32_t g)
         else if (gu_view == 2u)
             gu_home_ridge(w, h, acc, surf);
         else
-            gu_home_ring(w, h, acc, surf);
+            gu_home_trail(w, h, acc, surf);
         break;
     case GG_OSC1: case GG_OSC2: gu_osc(w, h, g == GG_OSC2, acc, surf); break;
     case GG_FILT: gu_filter(w, h, acc, surf); break;

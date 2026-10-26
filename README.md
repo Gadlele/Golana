@@ -61,7 +61,7 @@ It is a fork of [Felucca](https://github.com/hugelton/Felucca).
 </p>
 
 Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws
-the sound playing (RIDGE, RING or ORBIT). Four palettes: NIGHT, CRT, PAPER and NEON.
+the sound playing (TRAIL, ORBIT or RIDGE). Four palettes: NIGHT, CRT, PAPER and NEON.
 
 ## The controls
 

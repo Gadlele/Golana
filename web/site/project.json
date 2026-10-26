@@ -23,7 +23,7 @@
     {"t": "Unison and glide", "p": "POLY, MONO, LEGATO and UNISON: four voices, or eight detuned oscillators in unison. DETUNE, PORTA, EG RESET and SPREAD across the stereo field.", "c": "#b092ff"},
     {"t": "Arpeggiator and sequencer", "p": "Ten arp types (ORDER, CONVERGE, PEDAL and DOUBLE new in 1.1) over 1–4 octaves with latch, swing and steps on/off; a 16-step sequencer with notes, ties, accents and slides, saved with the program.", "c": "#5cceaa"},
     {"t": "Effects", "p": "MOD FX (chorus, flanger, ensemble, phaser, or METAL distortion), a stereo delay in time with the tempo and a reverb, in three orders.", "c": "#ff805c"},
-    {"t": "Pages that draw", "p": "Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws the sound playing: RIDGE, RING or ORBIT.", "c": "#66aaff"},
+    {"t": "Pages that draw", "p": "Each page draws its shape from the values: the waves, the filter's curve, the envelopes, the LFOs running. HOME draws the sound playing, with a trail: TRAIL, ORBIT or RIDGE.", "c": "#66aaff"},
     {"t": "32 programs", "p": "24 factory sounds (FAT BASS, ACID LINE, SYNC PAD, 80S BRASS, SOFT BELLS; new in 1.2: SUB BASS, REESE, WORN TAPE, AGED PAD…) and eight free slots. MIDI Program Change picks them.", "c": "#ffb547"},
     {"t": "Four palettes", "p": "NIGHT, CRT, PAPER and NEON. And a three-second power-on with the eighties' stripes.", "c": "#96d668"}
   ],

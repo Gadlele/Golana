@@ -46,8 +46,9 @@ picks a program.
 
 The pages that set a shape draw it above their four knobs, from the values themselves: OSC 1 and OSC 2 their wave,
 FILTER its response curve, FILTER EG and AMP EG the envelope, LFO 1 and LFO 2 the running wave. HOME draws the sound
-playing, three ways (GLO · SETUP · HOME): RIDGE, the default (the last waves stacked), RING (the wave round a circle) and ORBIT (the wave against itself a moment
-later). GLO · SETUP · PALETTE: NIGHT, CRT, PAPER, NEON (kept with the settings).
+playing, every frame, three ways (GLO · SETUP · HOME): TRAIL, the default (the wave, and the last ones behind it in a
+second colour of the palette: NIGHT's green), ORBIT (the wave against itself a moment later) and RIDGE (the last waves
+stacked); ORBIT and RIDGE leave a trail too. GLO · SETUP · PALETTE: NIGHT, CRT, PAPER, NEON (kept with the settings).
 
 The screen shows the open page as a tab, "BUTTON · PAGE" in that button's own colour, with the button's other pages as dark tabs beside it.
 The header shows the program, its name and the battery (a bolt on USB power); a thin strip at the bottom shows the arpeggiator (a light, ARP, LATCH) on the left and the tempo (BPM, EXT on an external clock) on the right.

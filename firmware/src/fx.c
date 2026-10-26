@@ -1058,7 +1058,11 @@ static void mix_part(track_t *t, uint32_t n)
  * Discussion #165): OUT (0, the default) what goes out, after MASTER (audio.c audio_block, before the click); MIX the
  * mix before MASTER (and before the FX layer, SPEAKER EQ and the limiter), at the level MASTER at its top gives, so its
  * size does not follow the volume. The click is in neither */
+#if GOLANA
+#define SCOPE_N 1024u                                   /* (Golana's HOME: ~30 ms and a trigger's search before them) */
+#else
 #define SCOPE_N 512u
+#endif
 static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
 static volatile uint8_t scope_mix;

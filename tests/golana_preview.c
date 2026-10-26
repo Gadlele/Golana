@@ -113,7 +113,7 @@ int main(int argc, char **argv)
         for (k = 0; k < 4u; k++) { setv(GL_ARPON, 1); setv(GL_ARPTYPE, (int32_t)(6u + k)); ui.force = 1; render(100); shot(NM[k]); }
         setv(GL_ARPON, 0); setv(GL_ARPTYPE, 0);
     }
-    /* the palettes: HOME (RING) and FILTER in each */
+    /* the palettes: HOME (TRAIL) and FILTER in each */
     gu_load(0);
     for (pal = 0; pal < 4u; pal++) {
         gu_pi = (uint8_t)pal;
