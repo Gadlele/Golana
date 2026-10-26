@@ -1,13 +1,13 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
-     The installer of Golana 1.2: Felucca's web installer (web/index_pkg.html, fm1ota.js, fm1pkg.js, fm1backup.js
+     The installer of Golana 1.3: Felucca's web installer (web/index_pkg.html, fm1ota.js, fm1pkg.js, fm1backup.js
      by Leo Kuroshita, Hügelton Instruments) with Golana's steps and look. Built by web/site/make_pages.py. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Install Golana 1.2</title>
-<meta name="description" content="Install Golana 1.2 on your M-VAVE FM-1 from the browser, over USB.">
+<title>Install Golana 1.3</title>
+<meta name="description" content="Install Golana 1.3 on your M-VAVE FM-1 from the browser, over USB.">
 <link rel="icon" href="../img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -90,7 +90,7 @@ footer p { margin: 0 0 10px; } footer a { color: var(--mid); }
   <div class="hero">
     <img src="../img/splash.gif" alt="Golana's power-on animation">
     <div>
-      <h1>Install Golana <span>1.2</span></h1>
+      <h1>Install Golana <span>1.3</span></h1>
       <p>One analog-style synth for the M-VAVE FM-1, laid out like the classic microKORG, with a screen that draws the sound. Installs from this page over USB, in Chrome or Edge. No extra hardware.</p>
     </div>
   </div>
@@ -144,10 +144,10 @@ footer p { margin: 0 0 10px; } footer a { color: var(--mid); }
   <section class="step" aria-labelledby="s5">
     <h2 id="s5"><span class="n">5</span>Install</h2>
     <div class="card main">
-      <h3>Install Golana 1.2</h3>
+      <h3>Install Golana 1.3</h3>
       <p class="small">Two steps, both automatic: the FM-1 checks the package and switches to update mode, then writes it
         and restarts. The page then asks the FM-1 what it runs, to be sure.</p>
-      <div class="row"><button id="go" disabled>Install Golana 1.2</button></div>
+      <div class="row"><button id="go" disabled>Install Golana 1.3</button></div>
       <progress id="bar" max="100" value="0"></progress>
       <p class="status" id="status" role="status" aria-live="polite"></p>
       <p class="small">If it stops: replug the cable and press Install again. The FM-1 stays in update mode until the
@@ -186,7 +186,7 @@ footer p { margin: 0 0 10px; } footer a { color: var(--mid); }
   </section>
 
   <footer>
-    <p>Golana 1.2 by Gadlele is free software under the
+    <p>Golana 1.3 by Gadlele is free software under the
       <a href="../firmware/LICENSE">GPL-3.0</a>, with <b>no warranty</b>. Source:
       <a href="https://github.com/Gadlele/Golana">github.com/Gadlele/Golana</a>.</p>
     <p>Based on <a href="https://github.com/hugelton/Felucca">Felucca</a> by Leo Kuroshita (@kurogedelic), Hügelton
@@ -863,7 +863,7 @@ class BackupConnection {
 }
 
 const $ = (id) => document.getElementById(id);
-const P = {"name": "Golana", "version": "1.2", "product": "FM-1_912", "size": 610086, "sha256": "7cd1fd491e9f2beb70cd2e8d23ee122fe666fff72eae32ff2a70e3eb1b7f745d", "pkg": "../firmware/Golana-1.2.fwsc"};
+const P = {"name": "Golana", "version": "1.3", "product": "FM-1_913", "size": 610086, "sha256": "49806d009e140d1e90a1396d0f8caf54870d9d633d3ade2718ec0461b9501745", "pkg": "../firmware/Golana-1.3.fwsc"};
 const TXT = {
   nomidi: "This browser cannot talk to the FM-1. Open the page in Chrome or Edge on a computer.",
   insecure: "Open this page over https (the browser allows MIDI only there).",
