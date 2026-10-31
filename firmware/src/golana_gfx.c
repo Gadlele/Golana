@@ -206,7 +206,7 @@ static int32_t gu_osc1_at(const int16_t *p, int32_t c1, uint32_t ph, uint32_t ph
         return osc_sine(ph + (((uint32_t)gl_osc2(0, ph2, 0) * (uint32_t)(c1 * 380)) << 1));
     default: {
         int32_t a = (int32_t)(ph >> 16) - 32768, b = (int32_t)((ph << 1) >> 16) - 32768;
-        return a + (((b - a) * c1) >> 8);
+        return a + (((b - a) * c1) >> 7);              /* SAW: as the sound, 127 the octave-up saw alone */
     }
     }
 }
