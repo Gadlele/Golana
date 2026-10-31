@@ -3,6 +3,12 @@
 Golana's versions, newest first. The numbers: **X.Y** adds something (saved programs still open), **X.Y.Z** only
 fixes, a new **X** may change how things are saved.
 
+## 1.3.1 — unreleased
+
+- **OSC 1's SAW OCTAVE is heard** (#2): CTRL 1 on SAW blended in a quarter of the octave-up saw at most, too little to
+  hear, and OCT LFO with it (the drawing showed half). It is now a crossfade: 0 the saw, 64 half each, 127 the saw
+  an octave up; the drawing as the sound. A program saved with OCTAVE on sounds brighter than before.
+
 ## 1.3 — 2026-10-26
 
 - **OSC 1's CTRL 1 and CTRL 2 say what they do**: their names change with the WAVE (SAW: OCTAVE, OCT LFO; PULSE:

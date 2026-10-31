@@ -2,7 +2,7 @@
  * Copyright (C) 2026 Gadlele, based on Felucca (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* GOLANA: the one engine of Golana, an analog-style synth after the classic microKORG layout.
  *
- *   OSC 1   SAW (CTRL1: a second saw an octave up blended in, brighter), PULSE (CTRL1: the width, 50 % .. ~5 %),
+ *   OSC 1   SAW (CTRL1: a crossfade to a second saw an octave up: 64 half each, 127 the octave up alone), PULSE (CTRL1: the width, 50 % .. ~5 %),
  *           TRI (CTRL1: folds the wave, more harmonics), SINE (CTRL1: cross modulation, OSC 2 moves its phase),
  *           (1.3) MORPH (CTRL1: from the saw to the square). CTRL2: LFO 1 on CTRL1 (PWM, a moving fold, ...)
  *   OSC 2   SAW / SQR / TRI / (1.3) MIX (a saw and a square at once), MOD OFF / RING (OSC 1 x OSC 2) / SYNC (restarts with OSC 1) / R+S, SEMI +-24, TUNE +-63 ct
@@ -410,7 +410,7 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
         if (m->pitch16 > 60 * 16)                       /* (1.3) halved an octave above C4, a third two above: in */
             xm = xm * 192 / (192 + m->pitch16 - 60 * 16);   /* tune high up, without its aliasing */
         int32_t tfold = 32768 + ctrl1 * 768;            /* TRI: the fold's gain, Q15 (1 .. 4) */
-        int32_t oct = ctrl1 * 129;                      /* SAW: the octave-up saw's share */
+        int32_t oct = ctrl1 * 258;                      /* SAW: the octave-up saw's share, Q15 (127: all of it) */
         int32_t mrph = ctrl1 * 258;                     /* MORPH: the square's share, Q15 */
         pw = 0x80000000u + (uint32_t)ctrl1 * 0xF00000u; /* PULSE: 50 % .. ~6 % */
         for (i = 0; i < n; i++) {
@@ -445,8 +445,8 @@ static void gol_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const v
             }
             default:
                 o1 = osc_saw(ph0, inc1);
-                if (oct)
-                    o1 = mulq15(o1, 32767 - (oct >> 1)) + mulq15(osc_saw(ph0 << 1, inc1 << 1), oct >> 1);
+                if (oct)                                /* (1.3.1, #2) a crossfade: 64 half each, 127 an octave up */
+                    o1 += mulq15(osc_saw(ph0 << 1, inc1 << 1) - o1, oct);
                 break;
             }
             if (ring)

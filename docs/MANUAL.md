@@ -8,7 +8,7 @@ Golana is free software under the GPL-3.0, like Felucca. Felucca's own README, f
 
 | Section | Parameters |
 | --- | --- |
-| OSC 1 | WAVE (SAW, PULSE, TRI, SINE; 1.3: MORPH), CTRL 1 and CTRL 2, named on the screen for what they do with the WAVE: SAW OCTAVE (an octave-up saw blended in) and OCT LFO; PULSE WIDTH (the duty, 50 % to 4 %) and PWM; TRI FOLD (wavefold) and FOLD LFO; SINE X-MOD (cross modulation from OSC 2, a little shallower high up: in tune, without aliasing) and XMOD LFO; MORPH MORPH (from the saw to the square) and MRPH LFO. CTRL 2 is LFO 1 moving CTRL 1: the drawing shows, faint, the two ends it reaches. The fourth card: LFO 1's rate |
+| OSC 1 | WAVE (SAW, PULSE, TRI, SINE; 1.3: MORPH), CTRL 1 and CTRL 2, named on the screen for what they do with the WAVE: SAW OCTAVE (a crossfade to a saw an octave up: half each at 64, only the octave up at 127) and OCT LFO; PULSE WIDTH (the duty, 50 % to 4 %) and PWM; TRI FOLD (wavefold) and FOLD LFO; SINE X-MOD (cross modulation from OSC 2, a little shallower high up: in tune, without aliasing) and XMOD LFO; MORPH MORPH (from the saw to the square) and MRPH LFO. CTRL 2 is LFO 1 moving CTRL 1: the drawing shows, faint, the two ends it reaches. The fourth card: LFO 1's rate |
 | OSC 2 | WAVE (SAW, SQR, TRI; 1.3: MIX, a saw and a square at once), MOD (OFF, RING, SYNC, R+S), SEMITONE, TUNE |
 | MIXER | OSC 1, OSC 2, NOISE, FOLD (a wavefolder on the mix, before the filter) |
 | SUB/DRIFT | (1.2) SUB TYPE (-1 SQR, -2 SQR, -1 SINE, -2 SINE; 1.3: -1 SAW, -2 SAW, -1 MIX, -2 MIX: one or two octaves below OSC 1, in step with it), SUB LEVEL (into the mixer, 0 off), DRIFT (analog age: each note's two oscillators a little out of tune, each its own way, slowly wandering, and its cutoff a little off; 0 off) |
