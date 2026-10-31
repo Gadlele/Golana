@@ -3,6 +3,13 @@
 Golana's versions, newest first. The numbers: **X.Y** adds something (saved programs still open), **X.Y.Z** only
 fixes, a new **X** may change how things are saved.
 
+## Unreleased
+
+- **MIDI IN on any channel** (GLO › GLOBAL › MIDI IN): ALL, or one of **CH 1..CH 16**. Golana then hears that channel
+  alone (notes, bend, CCs, program changes) and its keys send on it; the other channels stay free for other
+  instruments. CH 1 no longer also listens to channels 2..4. The choice is kept over a power-off (until now MIDI IN
+  always started at ALL).
+
 ## 1.3 — 2026-10-26
 
 - **OSC 1's CTRL 1 and CTRL 2 say what they do**: their names change with the WAVE (SAW: OCTAVE, OCT LFO; PULSE:

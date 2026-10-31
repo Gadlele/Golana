@@ -287,8 +287,13 @@ static int route_block_test(void)
 {
     static const char *const NAME[5] = {"CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16"};
     int bad = 0, ok = 1; uint32_t r, ch, i;
-    ok = GP[G_ROUTE].max == 4 && GP[G_ROUTE].def == 0;
+    char nm[8];
+    ok = GP[G_ROUTE].max == 20 && GP[G_ROUTE].def == 0;
     for (r = 0; r < 5u; r++) ok &= str_eq(GP[G_ROUTE].names[r], NAME[r]);
+    for (r = 5; r <= 20u; r++) {                           /* (1.3: CH1..CH16 appended) */
+        snprintf(nm, sizeof nm, "CH%u", (unsigned)(r - 4u));
+        ok &= str_eq(GP[G_ROUTE].names[r], nm);
+    }
     bad += check("ROUT: CH1-4 SEL (stored 0 1, as before), CH5-8 CH9-12 CH13-16 appended", ok);
     for (r = 2; r <= 4u; r++) {
         uint32_t b = (r - 1u) * 4u;
@@ -351,6 +356,47 @@ static int route_block_test(void)
     usb.config = 0; mo_r = mo_w;
     song.g[G_ROUTE] = 0; song.sel = 0; events_block(CTL);
     bad += check("MIDI out: the keys of track 3 send on channel 3 (CH1-4, SEL), 7 (CH5-8), 11 (CH9-12), 15 (CH13-16)", ok);
+    /* 1.3: CH1..CH16 (5..20): that one channel plays the selected track (notes, bend, CCs), every other ignored; the
+     * keys send on it */
+    ok = 1;
+    for (r = 5; r <= 20u; r++) {
+        uint32_t c = r - 5u;
+        midi_test_reset(); song.sel = 2; song.g[G_ROUTE] = (int16_t)r;
+        events_block(CTL);
+        ok &= midi_base() == (int32_t)c;
+        for (ch = 0; ch < 16u; ch++) {
+            uint32_t n = 40u + ch;
+            queued(0x90 | ch, n, 100, 1);
+            for (i = 0; i < NTRK; i++)
+                ok &= gate_note(&trk[i], n) == (ch == c && i == 2u);
+        }
+        queued(0xE0 | (c + 1u) % 16u, 127, 127, 1);
+        ok &= !midi_bend_target[2];
+        queued(0xE0 | c, 127, 127, 1);
+        ok &= midi_bend_target[2] == 512 && !midi_bend_target[0];
+        queued(0xB0 | (c + 1u) % 16u, 7, 9, 1); queued(0xB0 | c, 7, 5, 1);
+        ok &= trk[2].p[P_LEVEL] == 5;
+        queued(0xB0 | c, 123, 0, 1);
+        ok &= !any_gate();
+    }
+    usb.config = 1;
+    for (r = 5; r <= 20u; r++) {
+        midi_test_reset(); song.g[G_ROUTE] = (int16_t)r; song.sel = 2; mo_r = mo_w; events_block(CTL);
+        fm1_in.notes = 1u << 7; events_block(CTL);
+        ok &= ((out_last() >> 8) & 0xFFu) == (0x90u | (r - 5u));
+        fm1_in.notes = 0; events_block(CTL);
+    }
+    usb.config = 0; mo_r = mo_w;
+    /* a switch from a block to one channel lets go of the block's other channels */
+    midi_test_reset(); song.g[G_ROUTE] = 0; events_block(CTL);
+    queued(0x90, 60, 100, 1); queued(0x91, 62, 100, 1);
+    ok &= gate_note(&trk[0], 60) && gate_note(&trk[1], 62);
+    song.g[G_ROUTE] = 6; events_block(CTL);              /* CH2 */
+    ok &= !gate_note(&trk[0], 60);
+    song.g[G_ROUTE] = 0; song.sel = 0; events_block(CTL);
+    midi_test_reset();
+    bad += check("ROUT CH1..CH16: one channel plays the selected track (notes, bend, CCs, panic), the rest ignored; "
+                 "the keys send on it", ok);
     return bad;
 }
 /* #103: the standard CC map, on the track the channel plays, as a knob turn (and as AUTOMATION records one) */

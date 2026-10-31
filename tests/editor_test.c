@@ -829,7 +829,7 @@ static int usb_burst(void)
 }
 
 /* ---- MENU_DESC / MENU_SET (72, 73): the menu's settings over the editor ---- */
-typedef struct { uint32_t index, id, kind, nnames, tab, rest; int32_t value, min, max; char name[16], names[12][12], tabname[16], unit[16]; } menu_item_t;
+typedef struct { uint32_t index, id, kind, nnames, tab, rest; int32_t value, min, max; char name[16], names[24][12], tabname[16], unit[16]; } menu_item_t;
 static uint32_t menu_desc(uint32_t index, menu_item_t *it)   /* the reply's payload length; it parsed */
 {
     uint8_t a[1] = {(uint8_t)index};
@@ -846,7 +846,7 @@ static uint32_t menu_desc(uint32_t index, menu_item_t *it)   /* the reply's payl
         for (k = 0; p < n - 1u && host_wire[p] && k < 15u; ) it->unit[k++] = (char)host_wire[p++];
         p++;
     }
-    while (it->kind == 0u && p < n - 1u && it->nnames < 12u && (int32_t)it->nnames < it->max - it->min + 1) {   /* (kind 0: max - min + 1) */
+    while (it->kind == 0u && p < n - 1u && it->nnames < 24u && (int32_t)it->nnames < it->max - it->min + 1) {   /* (kind 0: max - min + 1) */
         for (k = 0; p < n - 1u && host_wire[p] && k < 11u; ) it->names[it->nnames][k++] = (char)host_wire[p++];
         p++; it->nnames++;
     }
@@ -875,7 +875,7 @@ static int menu_protocol(void)
         {"RESTORE LAST", "ON,OFF"}, {"SCALE LEDS", "OFF,ON"},                                        /* (1.2) */
         {"SCREEN OFF", "NEVER,5 MIN,15 MIN,30 MIN,60 MIN"},
         {"SCOPE", "OUT,MIX"}, {"STEP PREVIEW", "OFF,ON"}, {"CHORD ENTRY", "HOLD,ADD"},                  /* (1.2) */
-        {"MIDI IN", "CH1-4,SEL,CH5-8,CH9-12,CH13-16"}, {"TUNE", 0},   /* (1.2: the project's ROUT and TUNE; TUNE a number) */
+        {"MIDI IN", "CH1-4,SEL,CH5-8,CH9-12,CH13-16,CH1,CH2,CH3,CH4,CH5,CH6,CH7,CH8,CH9,CH10,CH11,CH12,CH13,CH14,CH15,CH16"}, {"TUNE", 0},   /* (1.2: the project's ROUT and TUNE; TUNE a number) */
         {"HOME", "SCOPE,TRACKS,LEVELS"},                                                       /* (1.3; 1.5: LEVELS) */
         {"HELP", "OFF,ON"}};                                                                         /* (1.5) */
     static const int32_t DEF[25] = {-1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};   /* (COLOR: the default palette) */
@@ -885,7 +885,7 @@ static int menu_protocol(void)
     int bad = 0, ok = 1;
     uint32_t i, k, n;
     menu_item_t it;
-    char joined[96];
+    char joined[192];
     const char *json = getenv("MENU_JSON");
     FILE *jf = json ? fopen(json, "w") : 0;
     reset();
@@ -984,7 +984,7 @@ static int menu_protocol(void)
     ok &= menu_set(2, 7) == 3 && ed_rv(host_wire + 7) == 1 && (ui_prefs & PREF_LARGE);
     ok &= menu_set(14, 9) == 3 && ed_rv(host_wire + 7) == 2 && cin_bars == 2u;
     ok &= menu_set(12, -1) == 3 && ed_rv(host_wire + 7) == 0 && click_mode == CLICK_OFF;
-    ok &= menu_set(21, 9) == 0 && ed_rv(host_wire + 7) == 4 && song.g[G_ROUTE] == 4;
+    ok &= menu_set(21, 29) == 0 && ed_rv(host_wire + 7) == 20 && song.g[G_ROUTE] == 20;   /* (1.3: CH1..CH16 5..20) */
     ok &= menu_set(22, -99) == 0 && ed_rv(host_wire + 7) == -50 && song.g[G_TUNE] == -50;
     ok &= menu_set(22, 51) == 0 && ed_rv(host_wire + 7) == 50 && song.g[G_TUNE] == 50;
     bad += check("MENU_SET: out-of-range values clamped, the reply says the value the device took (TUNE -50..50)", ok);
