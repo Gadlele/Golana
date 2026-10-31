@@ -461,8 +461,11 @@ grid lives in the steps themselves, so every engine has it:
   before. Until 1.0.2 every other channel played the selected track; since 1.0.3 channels 5..16 are
   ignored: notes, bend, CCs, aftertouch, panic and reset), 1 "SEL" (every channel → the selected track); since 1.2
   (append-only) 2 "CH5-8", 3 "CH9-12", 4 "CH13-16": channels 5..8, 9..12 or 13..16 → tracks 1..4, the others
-  ignored as with CH1-4, and the keys' MIDI out on the track's channel of that block. `DESC` of id 14 gives range
-  0..4 and the five names; firmware before 1.2 clamps 2..4 to 1 (SEL) when it loads such a project.
+  ignored as with CH1-4, and the keys' MIDI out on the track's channel of that block; since 1.3 (append-only)
+  5..20 "CH1".."CH16": that one channel → the selected track (Golana: GLO > GLOBAL MIDI IN CH 1..CH 16), every
+  other channel ignored, and the keys' MIDI out on it for every track. `DESC` of id 14 gives range
+  0..20 and the 21 names; firmware before 1.2 clamps 2..4 to 1 (SEL) when it loads such a project, before 1.3 5..20
+  to 4 (CH13-16).
   Neither setting affects this SysEx protocol or MIDI clock. The
   id, `G_COUNT` (27) and the project format are unchanged; it is saved and loaded with the project like
   the other globals. The editor shows it under GLOBAL > MIDI. 1.2: the GLO > GLOBAL and GLO > SYSTEM pages are
@@ -1045,7 +1048,7 @@ before MIDI IN the first 21, 1.2 the first 23, 1.3 / 1.4 the first 24):
 | 18 | 18 | SCOPE | 0 | 0 OUT, 1 MIX (1.2) | OUT | 0 DISPLAY |
 | 19 | 19 | STEP PREVIEW | 0 | 0 OFF, 1 ON (1.2) | OFF | 1 CONTROL |
 | 20 | 20 | CHORD ENTRY | 0 | 0 HOLD, 1 ADD (1.2) | HOLD | 1 CONTROL |
-| 21 | 21 | MIDI IN | 0 | 0 CH1-4, 1 SEL, 2 CH5-8, 3 CH9-12, 4 CH13-16 (1.2: the project's `G_ROUTE`, global 14) | CH1-4 | 3 MIDI |
+| 21 | 21 | MIDI IN | 0 | 0 CH1-4, 1 SEL, 2 CH5-8, 3 CH9-12, 4 CH13-16, 5..20 CH1..CH16 (1.3) (1.2: the project's `G_ROUTE`, global 14) | CH1-4 | 3 MIDI |
 | 22 | 22 | TUNE | 1 | -50..50, unit "ct" (1.2: the project's `G_TUNE`, global 3, cents) | 0 | 2 AUDIO |
 | 23 | 23 | HOME | 0 | 0 SCOPE, 1 TRACKS (1.3), 2 LEVELS (1.5; before: max 1) | SCOPE | 0 DISPLAY |
 | 24 | 24 | HELP | 0 | 0 OFF, 1 ON (1.5) | OFF | 4 SYSTEM |

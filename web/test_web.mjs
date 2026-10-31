@@ -184,7 +184,7 @@ async function editorMock() {
        items[18].names.join() === "OUT,MIX" && items[18].value === 0 && items[19].names.join() === "OFF,ON" &&
        items[19].value === 0 && items[20].names.join() === "HOLD,ADD" && items[20].value === 0 &&
        items.slice(0, 22).every((d) => d.kind === 0 && d.min === 0 && d.names.length === d.max - d.min + 1) &&
-       items[21].names.join() === "CH1-4,SEL,CH5-8,CH9-12,CH13-16" && items[21].value === 0 &&
+       items[21].names.join() === "CH1-4,SEL,CH5-8,CH9-12,CH13-16,CH1,CH2,CH3,CH4,CH5,CH6,CH7,CH8,CH9,CH10,CH11,CH12,CH13,CH14,CH15,CH16" && items[21].value === 0 &&
        items[22].kind === 1 && items[22].min === -50 && items[22].max === 50 && items[22].unit === "ct" && items[22].value === 0 &&
        items[23].kind === 0 && items[23].names.join() === "SCOPE,TRACKS,LEVELS" && items[23].value === 0 &&
        items[24].kind === 0 && items[24].names.join() === "OFF,ON" && items[24].value === 0 &&   // (1.5: HELP)
@@ -225,7 +225,7 @@ async function editorMock() {
       await rq(E.req.menuSet(id, 0));
     }
     {   /* 1.2: MIDI IN (21) and TUNE (22) are the project's ROUT (global 14) and TUNE (global 3): the same values as SET */
-      r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(21, 9)));
+      r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(21, 29)));   // (1.3: max 20, CH16)
       const g14 = E.parse[E.CMD.GET](await rq(E.req.get(1, 14))).value;
       await rq(E.req.set(1, 14, 2));
       const d21 = E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(21))).value;
@@ -233,7 +233,7 @@ async function editorMock() {
       const g3 = E.parse[E.CMD.GET](await rq(E.req.get(1, 3))).value;
       await rq(E.req.set(1, 3, 17));
       const d22 = E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(22))).value;
-      ok(r.rc === 0 && r.value === 4 && g14 === 4 && d21 === 2 && t.rc === 0 && t.value === -50 && g3 === -50 && d22 === 17,
+      ok(r.rc === 0 && r.value === 20 && g14 === 20 && d21 === 2 && t.rc === 0 && t.value === -50 && g3 === -50 && d22 === 17,
          "editor: MENU_SET MIDI IN / TUNE (1.2) set globals 14 / 3 (clamped, rc 0), MENU_DESC reads what SET set");
       await rq(E.req.set(1, 14, 0)); await rq(E.req.set(1, 3, 0));
     }
@@ -261,11 +261,11 @@ async function editorMock() {
   ok(set.value === 127, "editor: SET clamps to the range");
   {
     /* MENU > MIDI > MIDI IN (G_ROUTE 14; up to 1.1.5 GLO > SYSTEM ROUT): CH1-4 (0, the default) / SEL (1) / 1.2: CH5-8 CH9-12 CH13-16 (2..4);
-     * the id and G_COUNT unchanged; 5 clamps to the last */
+     * 1.3: CH1..CH16 (5..20); the id and G_COUNT unchanged; 21 clamps to the last */
     const rd = E.parse[E.CMD.DESC](await rq(E.req.desc(1, 14)));
-    const r1 = E.parse[E.CMD.SET](await rq(E.req.set(1, 14, 5)));
+    const r1 = E.parse[E.CMD.SET](await rq(E.req.set(1, 14, 21)));
     const r0 = E.parse[E.CMD.SET](await rq(E.req.set(1, 14, 0)));
-    ok(rd.label === "ROUT" && rd.def === 0 && eq(rd.names, ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16"]) && r1.value === 4 && r0.value === 0 && info.gcount === 27,
+    ok(rd.label === "ROUT" && rd.def === 0 && eq(rd.names, ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", ...Array.from({length: 16}, (_, i) => "CH" + (i + 1))]) && r1.value === 20 && r0.value === 0 && info.gcount === 27,
       "editor: MIDI IN routing (ROUT CH1-4 / SEL / CH5-8 / CH9-12 / CH13-16, global id 14)");
   }
   {

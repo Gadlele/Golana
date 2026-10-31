@@ -374,7 +374,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
     }
 }
 
-/* ROUT CH1-4 listens to channels 1..4 only (1.2: CH5-8, CH9-12, CH13-16 to their four). A switch to a block from
+/* ROUT CH1-4 listens to channels 1..4 only (1.2: CH5-8, CH9-12, CH13-16 to their four; 1.3: CH1..CH16 to that one). A switch to a block from
  * SEL or another block (events_block, before the queue) lets go of what the other channels hold: their notes
  * released (also pedal-held ones), their pedal, bend, wheel and RPN selection reset, so no note can hang on a
  * channel that is no longer heard. Each part's bend then follows its own channel of the block. */

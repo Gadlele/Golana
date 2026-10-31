@@ -177,6 +177,30 @@ int main(int argc, char **argv)
     web_midi(0xC0, 2, 0);
     render(100);
     check(gu.prog == 2, "Program Change loads program 3");
+    /* GLO > GLOBAL MIDI IN: ALL at first; CH 10 hears channel 10 alone, kept over a power-on (the settings) */
+    {
+        static const gu_par_t MIDI = {GV_MIDI, "MIDI IN", GN(N_GMIDI)};
+        int16_t r0 = song.g[G_ROUTE];
+        check(gu_get(&MIDI) == 0 && song.g[G_ROUTE] == 1 && gu_midi_pref == 0, "MIDI IN: ALL at power-on");
+        gu_set(&MIDI, 10);
+        check(song.g[G_ROUTE] == GU_ROUTE_CH1 + 9 && gu_get(&MIDI) == 10 && gu_midi_pref == 10, "MIDI IN: CH 10");
+        song.g[G_ROUTE] = 1;
+        gu_boot();
+        check(song.g[G_ROUTE] == GU_ROUTE_CH1 + 9 && gu_get(&MIDI) == 10, "MIDI IN: CH 10 kept over a power-on");
+        web_midi(0xC0, 4, 0);                            /* (channel 1: ignored) */
+        render(100);
+        check(gu.prog == 0, "MIDI IN CH 10: a Program Change on channel 1 ignored");
+        web_midi(0xC9, 2, 0);
+        render(100);
+        check(gu.prog == 2, "MIDI IN CH 10: a Program Change on channel 10 loads");
+        gu_set(&MIDI, 0);
+        check(song.g[G_ROUTE] == 1 && gu_midi_pref == 0, "MIDI IN: back to ALL");
+        gu_midi_pref = 77;                               /* (an unknown value: ALL) */
+        gu_boot();
+        check(song.g[G_ROUTE] == 1 && gu_midi_pref == 0, "MIDI IN: an unknown stored value boots as ALL");
+        song.g[G_ROUTE] = r0;
+        gu_load(2);
+    }
     /* LFO: LFO 1, LFO 2, then PATCH 1 */
     press(B_LFO);
     press(B_LFO);

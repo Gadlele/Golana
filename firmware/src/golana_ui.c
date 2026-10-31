@@ -71,7 +71,9 @@ static const char *const N_GVOICE[] = {"POLY", "MONO", "LEGATO", "UNISON"};
 static const char *const N_GRES[] = {"1/32", "1/24", "1/16", "1/12", "1/8", "1/4"};
 static const uint8_t GU_RES_DIV[6] = {3, 5, 2, 4, 1, 0};    /* N_GRES -> P_ARATE (params.c N_DIV) */
 static const char *const N_GCLOCK[] = {"INT", "USB", "TRS"};
-static const char *const N_GMIDI[] = {"ALL", "CH 1"};
+static const char *const N_GMIDI[] = {"ALL", "CH 1", "CH 2", "CH 3", "CH 4", "CH 5", "CH 6", "CH 7", "CH 8",
+                                      "CH 9", "CH 10", "CH 11", "CH 12", "CH 13", "CH 14", "CH 15", "CH 16"};
+#define GU_ROUTE_CH1 5                                /* G_ROUTE 5..20: CH1..CH16, that channel alone (seq.c midi_base) */
 static const char *const N_GSTYPE[] = {"REST", "NOTE", "TIE"};
 static const char *const N_GSFLAG[] = {"OFF", "ACCENT", "SLIDE", "BOTH"};
 static const char *const N_GLOCK[] = {"OFF", "ON", "WHITE"};   /* (1.3) P_QUANT: OFF, SNAP, WHITE (seq.c QN_*) */
@@ -226,7 +228,9 @@ static int gu_store(uint32_t k, const char *name)
 }
 
 /* the palette and HOME's drawing, with the settings (flash): in two of Felucca's settings this interface does not
- * use, HOLD (the layers' hold time) and LEDS (the idle glow) */
+ * use, HOLD (the layers' hold time) and LEDS (the idle glow). MIDI IN (GLO > GLOBAL) in a byte of the settings no
+ * engine and no Felucca setting uses: 0 ALL (its default), 1..16 CH 1..CH 16 */
+#define gu_midi_pref (favorites.factory[15][25])
 static void gu_prefs_load(void)
 {
     gu_pi = (uint8_t)((settings_hold + 3u) & 3u);       /* (HOLD's default, 1: NIGHT) */
@@ -263,7 +267,7 @@ static void gu_range(const gu_par_t *q, int32_t *lo, int32_t *hi)
     case GV_CLOCK: *lo = 0; *hi = 2; return;
     case GV_STEP: *lo = 1; *hi = 8; return;
     case GV_STEPON: *lo = 0; *hi = 1; return;
-    case GV_MIDI: *lo = 0; *hi = 1; return;
+    case GV_MIDI: *lo = 0; *hi = 16; return;
     case GV_PAL: *lo = 0; *hi = 3; return;
     case GV_VIEW: *lo = 0; *hi = 2; return;
     case GV_SSTEP: *lo = 1; *hi = gu_slen(); return;
@@ -304,7 +308,9 @@ static int32_t gu_get(const gu_par_t *q)
     case GV_CLOCK: return clamp(song.g[G_CLOCK], 0, 2);
     case GV_STEP: return gu.step + 1;
     case GV_STEPON: return (int32_t)((gu_steps() >> gu.step) & 1u);
-    case GV_MIDI: return song.g[G_ROUTE] == 1 ? 0 : 1;
+    case GV_MIDI:                                       /* (a block: its first channel) */
+        return song.g[G_ROUTE] == 1 ? 0 : song.g[G_ROUTE] >= GU_ROUTE_CH1 ? song.g[G_ROUTE] - GU_ROUTE_CH1 + 1
+             : song.g[G_ROUTE] ? (song.g[G_ROUTE] - 1) * 4 + 1 : 1;
     case GV_PAL: return gu_pi;
     case GV_VIEW: return gu_view;
     case GV_SSTEP: return gu.sstep + 1;
@@ -329,7 +335,11 @@ static void gu_set(const gu_par_t *q, int32_t v)
     case GV_TUNE: song.g[G_TUNE] = (int16_t)v; return;
     case GV_CLOCK: song.g[G_CLOCK] = (int16_t)v; return;
     case GV_STEP: gu.step = (uint8_t)(v - 1); return;
-    case GV_MIDI: song.g[G_ROUTE] = (int16_t)(v ? 0 : 1); return;
+    case GV_MIDI:
+        song.g[G_ROUTE] = (int16_t)(v ? GU_ROUTE_CH1 + v - 1 : 1);
+        gu_midi_pref = (uint8_t)v;
+        settings_save();                                /* (written when the sequencer is stopped: settings_poll) */
+        return;
     case GV_PAL:
     case GV_VIEW:
         if (q->id == GV_PAL)
@@ -1058,10 +1068,12 @@ static void gu_input(void)
     }
 }
 
-/* power-on (main.c, after felucca_init): MIDI from every channel, program 1 */
+/* power-on (main.c, after felucca_init): MIDI IN as last set (ALL: every channel), program 1 */
 static void gu_boot(void)
 {
-    song.g[G_ROUTE] = 1;                             /* SEL: every channel plays part 1 */
+    if (gu_midi_pref > 16u)                          /* (an unknown value: ALL) */
+        gu_midi_pref = 0;
+    song.g[G_ROUTE] = (int16_t)(gu_midi_pref ? GU_ROUTE_CH1 + gu_midi_pref - 1 : 1);   /* ALL: SEL, part 1 */
     song.sel = 0;
     gu.hot = -1;
     gu.shown_uboot = 0xFF;
