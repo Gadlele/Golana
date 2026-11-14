@@ -107,3 +107,5 @@ See [LICENSING.md](LICENSING.md) for every bundled work and its licence.
 
 Golana is free software under the [GPL-3.0](LICENSE), with no warranty. M-VAVE and FM-1 are trademarks of their
 respective owners, microKORG is a trademark of Korg; Golana is independent and not affiliated with them.
+
+You can also try Golana in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
